@@ -9,11 +9,11 @@ Dieses Projekt kombiniert eine OpenSX-Basisplatine mit einem Servo-Aufsatz (PCA9
 Wichtig: Der Jumper `A5_RX` auf der Basisplatine muss auf **A5** stehen, damit I2C-SCL korrekt verbunden ist.
 
 ## Bild Aufsatz
-![Servo-Aufsatz (PCA9685)](images/servo-aufsatz.jpg)
+![Servo-Aufsatz (eigene Platine)](images/servo-aufsatz-platine.png)
 
 ## Bild Basisplatine
-![Basisplatine v2.0](images/basisplatine-v2.0.jpg)
+![Basisplatine Servo (eigene Platine)](images/basisplatine-servo.png)
 
 ## Bildquellen
-- Aufsatzbild (lokale Quelle): `/home/michael/Dokumente/Selectrix/ServoAufsatz/assets/image.jpg`
-- Basisplatine (lokale Quelle): `/home/michael/opensx_hardware/Basisplatine-2.0/basisplatine-v2.0.jpg`
+- Aufsatzbild (lokale Quelle): `/home/michael/Bilder/ServoAufsatz.png`
+- Basisplatinenbild (lokale Quelle): `/home/michael/Bilder/BasisPlatine Servo.png`

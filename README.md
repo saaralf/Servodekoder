@@ -19,6 +19,12 @@ Dieses Repository enthält:
 - Servo-Aufsatz führt +5V über MOSFET-Schutzpfad.
 - GND zwischen Logik und Servo muss gemeinsam sein.
 
+## Bilder unserer Platinen
+- Aufsatz:
+  ![Servo-Aufsatz](docs/images/servo-aufsatz-platine.png)
+- Basisplatine:
+  ![Basisplatine Servo](docs/images/basisplatine-servo.png)
+
 ## Test
 - Sketch hochladen: `software/ServoTest/ServoTest.ino`
 - Serielle Konsole 115200 öffnen
