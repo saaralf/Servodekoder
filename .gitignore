@@ -1,0 +1,12 @@
+# Eagle Backup-Dateien
+*.b#*
+*.s#*
+
+# CAM/Gerber-Ausgaben (falls lokal erzeugt)
+CAMOutputs/
+
+# OS/Editor
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
