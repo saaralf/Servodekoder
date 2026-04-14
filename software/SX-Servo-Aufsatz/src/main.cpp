@@ -1,18 +1,24 @@
 #include <Arduino.h>
 
-// put function declarations here:
-int myFunction(int, int);
+const uint8_t LED_PIN = LED_BUILTIN;
+unsigned long lastMsg = 0;
+bool ledState = false;
 
 void setup() {
-  // put your setup code here, to run once:
-  int result = myFunction(2, 3);
+  pinMode(LED_PIN, OUTPUT);
+  Serial.begin(115200);
+  delay(200);
+  Serial.println("[SX-Servo-Aufsatz] Serial Monitor OK");
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
-}
+  const unsigned long now = millis();
+  if (now - lastMsg >= 1000) {
+    lastMsg = now;
+    ledState = !ledState;
+    digitalWrite(LED_PIN, ledState ? HIGH : LOW);
 
-// put function definitions here:
-int myFunction(int x, int y) {
-  return x + y;
+    Serial.print("Heartbeat, uptime(ms)=");
+    Serial.println(now);
+  }
 }
