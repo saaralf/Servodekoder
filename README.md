@@ -6,6 +6,7 @@ Dieses Repository enthält:
   - `hardware/SXV0300_Servo.sch` / `hardware/SXV0300_Servo.brd` (Basisplatine v300 Servo)
 - Software
   - `software/ServoTest/ServoTest.ino` (Arduino-Testsketch für PCA9685)
+  - `software/SX-Servo-Aufsatz/` (PlatformIO-Projekt, Arbeitsstand)
 
 ## Annahmen / Pinning
 - PCA9685 Adresse fest: `0x40` (A0..A5 auf GND)
