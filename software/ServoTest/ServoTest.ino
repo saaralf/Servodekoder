@@ -52,6 +52,7 @@ void printHelp() {
   Serial.println(F("  a <winkel>     -> alle 16 Servos auf Winkel (0..180)"));
   Serial.println(F("  c <ch> <w>     -> Kanal ch (0..15) auf Winkel w (0..180)"));
   Serial.println(F("  d              -> Demofahrt"));
+  Serial.println(F("  t              -> Servo-0-Test (30/150 Grad)"));
   Serial.println();
 }
 
@@ -67,6 +68,18 @@ void demoSweep() {
   Serial.println(F("Demo fertig."));
 }
 
+void testServo0() {
+  Serial.println(F("Servo-0-Test startet (30 <-> 150 Grad)..."));
+  for (uint8_t i = 0; i < 6; i++) {
+    setServoAngle(0, 30);
+    delay(700);
+    setServoAngle(0, 150);
+    delay(700);
+  }
+  setServoAngle(0, 90);
+  Serial.println(F("Servo-0-Test fertig. Servo 0 steht auf 90 Grad."));
+}
+
 void setup() {
   Serial.begin(115200);
   delay(300);
@@ -79,6 +92,7 @@ void setup() {
 
   Serial.println(F("ServoTest fuer PCA9685 gestartet."));
   Serial.println(F("Adresse erwartet: 0x40"));
+  Serial.println(F("Wichtig: Externe 5V fuer Servo-V+ verwenden, GND gemeinsam."));
 
   scanI2C();
 
@@ -98,6 +112,8 @@ void loop() {
     scanI2C();
   } else if (cmd == 'd') {
     demoSweep();
+  } else if (cmd == 't') {
+    testServo0();
   } else if (cmd == 'a') {
     int w = Serial.parseInt();
     if (w < 0) w = 0;
