@@ -172,7 +172,7 @@ void saveConfig() {
   Serial.println(F("Konfiguration in EEPROM gespeichert."));
 }
 
-void loadConfig() {
+bool loadConfig() {
   Servo0Config cfg;
   EEPROM.get(CFG_ADDR, cfg);
   if (configIsValid(cfg)) {
@@ -180,10 +180,9 @@ void loadConfig() {
     servo0RelMin = cfg.relMin;
     servo0RelMax = cfg.relMax;
     divergingIsLeft = (cfg.divergingIsLeft == 1);
-    Serial.println(F("EEPROM-Konfiguration geladen."));
-  } else {
-    Serial.println(F("Keine gueltige EEPROM-Konfiguration, Defaults aktiv."));
+    return true;
   }
+  return false;
 }
 
 void scanI2C() {
@@ -244,11 +243,19 @@ void setup() {
   Serial.println(F("PCA9685 Adresse: 0x40"));
   Serial.println(F("Hinweis: Externe 5V fuer Servo-V+ verwenden, GND gemeinsam."));
 
-  loadConfig();
-  scanI2C();
+  bool loadedFromEeprom = loadConfig();
+
+  if (loadedFromEeprom) {
+    Serial.println(F("EEPROM-Konfiguration gefunden und geladen."));
+  } else {
+    Serial.println(F("Keine gueltige EEPROM-Konfiguration, aktuelle Defaults aktiv."));
+  }
 
   calibrationMode = false;
-  setServo0Relative(0);  // sicher in die Mitte relativ zum Nullpunkt
+  setServo0Relative(0);  // beim Start IMMER zuerst Mitte
+  Serial.println(F("Startposition: Mitte (rel 0) gesetzt."));
+
+  scanI2C();
   printHelp();
 }
 
