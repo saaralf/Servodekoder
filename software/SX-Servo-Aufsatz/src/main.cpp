@@ -1,4 +1,5 @@
 #include <Wire.h>
+#include <EEPROM.h>
 #include <Adafruit_PWMServoDriver.h>
 
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
@@ -7,13 +8,27 @@ const uint16_t SERVO_MIN_TICK = 110;  // physisch ~0°
 const uint16_t SERVO_MAX_TICK = 500;  // physisch ~180°
 
 const uint8_t SERVO_COUNT = 16;
-const uint8_t SERVO0_STEP = 5;
+const uint8_t SERVO0_STEP = 2;  // feiner für Kalibrierung
 
-// Referenzpunkt fuer RELATIV-Winkel (0 = Mittelstellung)
-// Standard: 90 => damit sind -90..+90 voll erreichbar.
+// Referenzpunkt für RELATIV-Winkel (0 = Mittelstellung)
 int16_t servo0ZeroPhys = 90;
 int16_t servo0RelAngle = 0;   // -90..+90
 int16_t servo0PhysAngle = 90; // 0..180
+
+// Gelernte Softlimits (ohne Endschalter-Rückmeldung absolut wichtig)
+int16_t servo0RelMin = -60;
+int16_t servo0RelMax = 60;
+bool calibrationMode = false;  // true: volle -90..+90 zum Einlernen
+
+struct Servo0Config {
+  uint16_t magic;
+  int16_t zeroPhys;
+  int16_t relMin;
+  int16_t relMax;
+};
+
+const uint16_t CFG_MAGIC = 0x5A31;
+const int CFG_ADDR = 0;
 
 uint16_t angleToTick(uint8_t angle) {
   if (angle > 180) angle = 180;
@@ -29,6 +44,17 @@ void allServos(uint8_t angle) {
   for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) setServoAngle(ch, angle);
 }
 
+int16_t clampRel(int16_t rel) {
+  if (rel < -90) rel = -90;
+  if (rel > 90) rel = 90;
+
+  if (!calibrationMode) {
+    if (rel < servo0RelMin) rel = servo0RelMin;
+    if (rel > servo0RelMax) rel = servo0RelMax;
+  }
+  return rel;
+}
+
 void printServo0State() {
   Serial.print(F("Servo0: rel="));
   Serial.print(servo0RelAngle);
@@ -36,7 +62,12 @@ void printServo0State() {
   Serial.print(servo0PhysAngle);
   Serial.print(F("°, zeroPhys="));
   Serial.print(servo0ZeroPhys);
-  Serial.println(F("°"));
+  Serial.print(F("°, limits=["));
+  Serial.print(servo0RelMin);
+  Serial.print(F(".."));
+  Serial.print(servo0RelMax);
+  Serial.print(F("], mode="));
+  Serial.println(calibrationMode ? F("CAL") : F("RUN"));
 }
 
 void setServo0Physical(int16_t phys) {
@@ -45,18 +76,20 @@ void setServo0Physical(int16_t phys) {
 
   servo0PhysAngle = phys;
   servo0RelAngle = servo0PhysAngle - servo0ZeroPhys;
-  if (servo0RelAngle < -90) servo0RelAngle = -90;
-  if (servo0RelAngle > 90) servo0RelAngle = 90;
+  servo0RelAngle = clampRel(servo0RelAngle);
+
+  // rel wieder konsistent in phys zurückrechnen (falls geclamped)
+  servo0PhysAngle = servo0ZeroPhys + servo0RelAngle;
+  if (servo0PhysAngle < 0) servo0PhysAngle = 0;
+  if (servo0PhysAngle > 180) servo0PhysAngle = 180;
 
   setServoAngle(0, (uint8_t)servo0PhysAngle);
   printServo0State();
 }
 
 void setServo0Relative(int16_t rel) {
-  if (rel < -90) rel = -90;
-  if (rel > 90) rel = 90;
+  servo0RelAngle = clampRel(rel);
 
-  servo0RelAngle = rel;
   int16_t phys = servo0ZeroPhys + servo0RelAngle;
   if (phys < 0) phys = 0;
   if (phys > 180) phys = 180;
@@ -68,6 +101,38 @@ void setServo0Relative(int16_t rel) {
 
 void moveServo0Relative(int16_t delta) {
   setServo0Relative(servo0RelAngle + delta);
+}
+
+bool configIsValid(const Servo0Config &cfg) {
+  if (cfg.magic != CFG_MAGIC) return false;
+  if (cfg.zeroPhys < 0 || cfg.zeroPhys > 180) return false;
+  if (cfg.relMin < -90 || cfg.relMin > 90) return false;
+  if (cfg.relMax < -90 || cfg.relMax > 90) return false;
+  if (cfg.relMin >= cfg.relMax) return false;
+  return true;
+}
+
+void saveConfig() {
+  Servo0Config cfg;
+  cfg.magic = CFG_MAGIC;
+  cfg.zeroPhys = servo0ZeroPhys;
+  cfg.relMin = servo0RelMin;
+  cfg.relMax = servo0RelMax;
+  EEPROM.put(CFG_ADDR, cfg);
+  Serial.println(F("Konfiguration in EEPROM gespeichert."));
+}
+
+void loadConfig() {
+  Servo0Config cfg;
+  EEPROM.get(CFG_ADDR, cfg);
+  if (configIsValid(cfg)) {
+    servo0ZeroPhys = cfg.zeroPhys;
+    servo0RelMin = cfg.relMin;
+    servo0RelMax = cfg.relMax;
+    Serial.println(F("EEPROM-Konfiguration geladen."));
+  } else {
+    Serial.println(F("Keine gueltige EEPROM-Konfiguration, Defaults aktiv."));
+  }
 }
 
 void scanI2C() {
@@ -90,13 +155,20 @@ void printHelp() {
   Serial.println(F("  s              -> I2C-Scan"));
   Serial.println(F("  p              -> Status Servo 0"));
   Serial.println(F("  0              -> Servo 0 auf rel 0"));
-  Serial.println(F("  +              -> Servo 0 +5 Grad (rel)"));
-  Serial.println(F("  -              -> Servo 0 -5 Grad (rel)"));
+  Serial.println(F("  +              -> Servo 0 +2 Grad (rel)"));
+  Serial.println(F("  -              -> Servo 0 -2 Grad (rel)"));
   Serial.println(F("  + <n>          -> Servo 0 +n Grad (rel)"));
   Serial.println(F("  - <n>          -> Servo 0 -n Grad (rel)"));
   Serial.println(F("  x <n>          -> Servo 0 absolut rel -90..+90"));
   Serial.println(F("  c 0 <w>        -> Servo 0 absolut phys 0..180"));
   Serial.println(F("  z <phys>       -> Nullpunkt setzen (0..180), z.B. z 90"));
+  Serial.println(F("  1              -> Servo 0 auf linken Softlimit-Punkt"));
+  Serial.println(F("  2              -> Servo 0 auf rechten Softlimit-Punkt"));
+  Serial.println(F("  k              -> Kalibriermodus EIN (volle -90..+90)"));
+  Serial.println(F("  n              -> Kalibriermodus AUS (Softlimits aktiv)"));
+  Serial.println(F("  l              -> aktueller rel-Wert als LINKS-Limit speichern"));
+  Serial.println(F("  r              -> aktueller rel-Wert als RECHTS-Limit speichern"));
+  Serial.println(F("  v              -> Limits/Nullpunkt in EEPROM speichern"));
   Serial.println(F("  t              -> Servo-0-Test (-30 <-> +30 rel)"));
   Serial.println(F("  a <winkel>     -> alle 16 Servos phys 0..180"));
   Serial.println();
@@ -127,8 +199,11 @@ void setup() {
   Serial.println(F("PCA9685 Adresse: 0x40"));
   Serial.println(F("Hinweis: Externe 5V fuer Servo-V+ verwenden, GND gemeinsam."));
 
+  loadConfig();
   scanI2C();
-  setServo0Relative(0);
+
+  calibrationMode = false;
+  setServo0Relative(0);  // sicher in die Mitte relativ zum Nullpunkt
   printHelp();
 }
 
@@ -144,6 +219,10 @@ void loop() {
     printServo0State();
   } else if (cmd == '0') {
     setServo0Relative(0);
+  } else if (cmd == '1') {
+    setServo0Relative(servo0RelMin);
+  } else if (cmd == '2') {
+    setServo0Relative(servo0RelMax);
   } else if (cmd == '+') {
     int step = Serial.parseInt();
     if (step <= 0) step = SERVO0_STEP;
@@ -165,6 +244,32 @@ void loop() {
     Serial.print(F("Neuer Zero-Phys gesetzt: "));
     Serial.println(servo0ZeroPhys);
     setServo0Relative(0);
+  } else if (cmd == 'k') {
+    calibrationMode = true;
+    Serial.println(F("Kalibriermodus EIN (volle -90..+90 ohne Softlimit-Klemme)."));
+    printServo0State();
+  } else if (cmd == 'n') {
+    calibrationMode = false;
+    Serial.println(F("Kalibriermodus AUS (Softlimits aktiv)."));
+    setServo0Relative(servo0RelAngle);
+  } else if (cmd == 'l') {
+    servo0RelMin = servo0RelAngle;
+    if (servo0RelMin >= servo0RelMax) {
+      servo0RelMin = servo0RelMax - 1;
+      if (servo0RelMin < -90) servo0RelMin = -90;
+    }
+    Serial.print(F("Neues LINKS-Limit: "));
+    Serial.println(servo0RelMin);
+  } else if (cmd == 'r') {
+    servo0RelMax = servo0RelAngle;
+    if (servo0RelMax <= servo0RelMin) {
+      servo0RelMax = servo0RelMin + 1;
+      if (servo0RelMax > 90) servo0RelMax = 90;
+    }
+    Serial.print(F("Neues RECHTS-Limit: "));
+    Serial.println(servo0RelMax);
+  } else if (cmd == 'v') {
+    saveConfig();
   } else if (cmd == 't') {
     testServo0();
   } else if (cmd == 'a') {
