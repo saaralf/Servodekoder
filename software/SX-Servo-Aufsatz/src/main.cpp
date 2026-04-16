@@ -211,6 +211,12 @@ void loop() {
   if (!Serial.available()) return;
   char cmd = Serial.read();
 
+  // Leerzeichen / CR / LF ignorieren (wichtig fuer Monitor mit CRLF)
+  if (cmd == '\r' || cmd == '\n' || cmd == ' ' || cmd == '\t') return;
+
+  // Grossbuchstaben auf Kleinbuchstaben abbilden
+  if (cmd >= 'A' && cmd <= 'Z') cmd = cmd - 'A' + 'a';
+
   if (cmd == 'h') {
     printHelp();
   } else if (cmd == 's') {
@@ -258,16 +264,20 @@ void loop() {
       servo0RelMin = servo0RelMax - 1;
       if (servo0RelMin < -90) servo0RelMin = -90;
     }
-    Serial.print(F("Neues LINKS-Limit: "));
+    Serial.print(F("Neues LINKS-Limit (RAM): "));
     Serial.println(servo0RelMin);
+    Serial.println(F("Hinweis: mit 'v' dauerhaft in EEPROM speichern."));
+    printServo0State();
   } else if (cmd == 'r') {
     servo0RelMax = servo0RelAngle;
     if (servo0RelMax <= servo0RelMin) {
       servo0RelMax = servo0RelMin + 1;
       if (servo0RelMax > 90) servo0RelMax = 90;
     }
-    Serial.print(F("Neues RECHTS-Limit: "));
+    Serial.print(F("Neues RECHTS-Limit (RAM): "));
     Serial.println(servo0RelMax);
+    Serial.println(F("Hinweis: mit 'v' dauerhaft in EEPROM speichern."));
+    printServo0State();
   } else if (cmd == 'v') {
     saveConfig();
   } else if (cmd == 't') {
@@ -298,5 +308,9 @@ void loop() {
       Serial.print(F(" -> phys "));
       Serial.println(w);
     }
+  } else {
+    Serial.print(F("Unbekannter Befehl: '"));
+    Serial.print(cmd);
+    Serial.println(F("' (h fuer Hilfe)"));
   }
 }
