@@ -18,6 +18,7 @@ int16_t servo0PhysAngle = 90; // 0..180
 // Gelernte Softlimits (ohne Endschalter-Rückmeldung absolut wichtig)
 int16_t servo0RelMin = -35;
 int16_t servo0RelMax = 35;
+bool divergingIsLeft = true;   // true: Abzweig liegt auf linker Seite
 bool calibrationMode = false;  // true: volle -90..+90 zum Einlernen
 
 struct Servo0Config {
@@ -25,6 +26,7 @@ struct Servo0Config {
   int16_t zeroPhys;
   int16_t relMin;
   int16_t relMax;
+  int8_t divergingIsLeft;
 };
 
 const uint16_t CFG_MAGIC = 0x5A31;
@@ -66,7 +68,9 @@ void printServo0State() {
   Serial.print(servo0RelMin);
   Serial.print(F(".."));
   Serial.print(servo0RelMax);
-  Serial.print(F("], mode="));
+  Serial.print(F("], abzweig="));
+  Serial.print(divergingIsLeft ? F("links") : F("rechts"));
+  Serial.print(F(", mode="));
   Serial.println(calibrationMode ? F("CAL") : F("RUN"));
 }
 
@@ -103,12 +107,44 @@ void moveServo0Relative(int16_t delta) {
   setServo0Relative(servo0RelAngle + delta);
 }
 
+int16_t getRelTargetAbzweig() {
+  return divergingIsLeft ? servo0RelMin : servo0RelMax;
+}
+
+int16_t getRelTargetGerade() {
+  return divergingIsLeft ? servo0RelMax : servo0RelMin;
+}
+
+void moveToAbzweig() {
+  Serial.println(F("Weiche -> ABZWEIG"));
+  setServo0Relative(getRelTargetAbzweig());
+}
+
+void moveToGerade() {
+  Serial.println(F("Weiche -> GERADE"));
+  setServo0Relative(getRelTargetGerade());
+}
+
+char readNextTokenChar(uint16_t timeoutMs = 500) {
+  unsigned long start = millis();
+  while (millis() - start < timeoutMs) {
+    while (Serial.available()) {
+      char c = Serial.read();
+      if (c == '\r' || c == '\n' || c == ' ' || c == '\t') continue;
+      if (c >= 'A' && c <= 'Z') c = c - 'A' + 'a';
+      return c;
+    }
+  }
+  return 0;
+}
+
 bool configIsValid(const Servo0Config &cfg) {
   if (cfg.magic != CFG_MAGIC) return false;
   if (cfg.zeroPhys < 0 || cfg.zeroPhys > 180) return false;
   if (cfg.relMin < -90 || cfg.relMin > 90) return false;
   if (cfg.relMax < -90 || cfg.relMax > 90) return false;
   if (cfg.relMin >= cfg.relMax) return false;
+  if (!(cfg.divergingIsLeft == 0 || cfg.divergingIsLeft == 1)) return false;
   return true;
 }
 
@@ -118,6 +154,7 @@ void saveConfig() {
   cfg.zeroPhys = servo0ZeroPhys;
   cfg.relMin = servo0RelMin;
   cfg.relMax = servo0RelMax;
+  cfg.divergingIsLeft = divergingIsLeft ? 1 : 0;
   EEPROM.put(CFG_ADDR, cfg);
   Serial.println(F("Konfiguration in EEPROM gespeichert."));
 }
@@ -129,6 +166,7 @@ void loadConfig() {
     servo0ZeroPhys = cfg.zeroPhys;
     servo0RelMin = cfg.relMin;
     servo0RelMax = cfg.relMax;
+    divergingIsLeft = (cfg.divergingIsLeft == 1);
     Serial.println(F("EEPROM-Konfiguration geladen."));
   } else {
     Serial.println(F("Keine gueltige EEPROM-Konfiguration, Defaults aktiv."));
@@ -163,6 +201,9 @@ void printHelp() {
   Serial.println(F("  c 0 <w>        -> Servo 0 absolut phys 0..180"));
   Serial.println(F("  z <phys>       -> Nullpunkt setzen (0..180), z.B. z 90"));
   Serial.println(F("  f              -> empfohlene Defaults: zero=90, limits=-35/+35"));
+  Serial.println(F("  g              -> Weiche GERADE (ziel = gegenueber Abzweigseite)"));
+  Serial.println(F("  b              -> Weiche ABZWEIG (ziel = Schalterseite)"));
+  Serial.println(F("  o l|r          -> Abzweigseite setzen: links oder rechts"));
   Serial.println(F("  1              -> Servo 0 auf linken Softlimit-Punkt"));
   Serial.println(F("  2              -> Servo 0 auf rechten Softlimit-Punkt"));
   Serial.println(F("  k              -> Kalibriermodus EIN (volle -90..+90)"));
@@ -255,8 +296,26 @@ void loop() {
     servo0ZeroPhys = 90;
     servo0RelMin = -35;
     servo0RelMax = 35;
-    Serial.println(F("Defaults gesetzt: zero=90, limits=-35/+35"));
+    divergingIsLeft = true;
+    Serial.println(F("Defaults gesetzt: zero=90, limits=-35/+35, abzweig=links"));
     setServo0Relative(0);
+  } else if (cmd == 'g') {
+    moveToGerade();
+  } else if (cmd == 'b') {
+    moveToAbzweig();
+  } else if (cmd == 'o') {
+    char side = readNextTokenChar();
+    if (side == 'l') {
+      divergingIsLeft = true;
+      Serial.println(F("Abzweigseite gesetzt: links"));
+      printServo0State();
+    } else if (side == 'r') {
+      divergingIsLeft = false;
+      Serial.println(F("Abzweigseite gesetzt: rechts"));
+      printServo0State();
+    } else {
+      Serial.println(F("Ungueltig. Nutzung: o l   oder   o r"));
+    }
   } else if (cmd == 'k') {
     calibrationMode = true;
     Serial.println(F("Kalibriermodus EIN (volle -90..+90 ohne Softlimit-Klemme)."));
