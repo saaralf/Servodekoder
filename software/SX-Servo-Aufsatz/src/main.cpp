@@ -8,134 +8,149 @@ const uint16_t SERVO_MIN_TICK = 110;  // physisch ~0°
 const uint16_t SERVO_MAX_TICK = 500;  // physisch ~180°
 
 const uint8_t SERVO_COUNT = 16;
-const uint8_t SERVO0_STEP = 1;  // feine Justierung mit +/-
 
-// Referenzpunkt für RELATIV-Winkel (0 = Mittelstellung)
-int16_t servo0ZeroPhys = 90;
-int16_t servo0RelAngle = 0;   // -90..+90
-int16_t servo0PhysAngle = 90; // 0..180
-
-// Gelernte Softlimits (ohne Endschalter-Rückmeldung absolut wichtig)
-int16_t servo0RelMin = -40;
-int16_t servo0RelMax = 40;
-bool divergingIsLeft = true;   // true: Abzweig liegt auf linker Seite
-bool calibrationMode = false;  // true: volle -90..+90 zum Einlernen
-
-struct Servo0Config {
-  uint16_t magic;
-  int16_t zeroPhys;
-  int16_t relMin;
-  int16_t relMax;
-  int8_t divergingIsLeft;
+struct ServoConfig {
+  int16_t zeroPhys;         // physischer Nullpunkt fuer rel=0
+  int16_t relMin;           // linker Endpunkt (rel)
+  int16_t relMax;           // rechter Endpunkt (rel)
+  int8_t divergingIsLeft;   // 1=Abzweig links, 0=Abzweig rechts
 };
 
-const uint16_t CFG_MAGIC = 0x5A31;
+struct EepromBlob {
+  uint16_t magic;
+  ServoConfig cfg[SERVO_COUNT];
+};
+
+const uint16_t CFG_MAGIC = 0x5A32;
 const int CFG_ADDR = 0;
 
-int16_t getRelTargetAbzweig();
-int16_t getRelTargetGerade();
-const __FlashStringHelper* getTurnoutStateText();
+ServoConfig g_cfg[SERVO_COUNT];
+int16_t g_relAngle[SERVO_COUNT];
+int16_t g_physAngle[SERVO_COUNT];
+
+uint8_t g_activeServo = 0;
 
 uint16_t angleToTick(uint8_t angle) {
   if (angle > 180) angle = 180;
   return map(angle, 0, 180, SERVO_MIN_TICK, SERVO_MAX_TICK);
 }
 
-void setServoAngle(uint8_t channel, uint8_t angle) {
+void setServoAngleRaw(uint8_t channel, uint8_t angle) {
   if (channel >= SERVO_COUNT) return;
   pwm.setPWM(channel, 0, angleToTick(angle));
 }
 
-void allServos(uint8_t angle) {
-  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) setServoAngle(ch, angle);
-}
-
-int16_t clampRel(int16_t rel) {
+int16_t clampRel(uint8_t ch, int16_t rel) {
   if (rel < -90) rel = -90;
   if (rel > 90) rel = 90;
 
-  if (!calibrationMode) {
-    if (rel < servo0RelMin) rel = servo0RelMin;
-    if (rel > servo0RelMax) rel = servo0RelMax;
-  }
+  if (rel < g_cfg[ch].relMin) rel = g_cfg[ch].relMin;
+  if (rel > g_cfg[ch].relMax) rel = g_cfg[ch].relMax;
   return rel;
 }
 
-void printServo0State() {
-  Serial.print(F("Servo0: rel="));
-  Serial.print(servo0RelAngle);
-  Serial.print(F("°, phys="));
-  Serial.print(servo0PhysAngle);
-  Serial.print(F("°, zeroPhys="));
-  Serial.print(servo0ZeroPhys);
-  Serial.print(F("°, limits=["));
-  Serial.print(servo0RelMin);
-  Serial.print(F(".."));
-  Serial.print(servo0RelMax);
-  Serial.print(F("], abzweig="));
-  Serial.print(divergingIsLeft ? F("links") : F("rechts"));
-  Serial.print(F(", stellung="));
-  Serial.print(getTurnoutStateText());
-  Serial.print(F(", mode="));
-  Serial.println(calibrationMode ? F("CAL") : F("RUN"));
+int16_t getRelTargetAbzweig(uint8_t ch) {
+  return (g_cfg[ch].divergingIsLeft == 1) ? g_cfg[ch].relMin : g_cfg[ch].relMax;
 }
 
-void setServo0Physical(int16_t phys) {
-  if (phys < 0) phys = 0;
-  if (phys > 180) phys = 180;
-
-  servo0PhysAngle = phys;
-  servo0RelAngle = servo0PhysAngle - servo0ZeroPhys;
-  servo0RelAngle = clampRel(servo0RelAngle);
-
-  // rel wieder konsistent in phys zurückrechnen (falls geclamped)
-  servo0PhysAngle = servo0ZeroPhys + servo0RelAngle;
-  if (servo0PhysAngle < 0) servo0PhysAngle = 0;
-  if (servo0PhysAngle > 180) servo0PhysAngle = 180;
-
-  setServoAngle(0, (uint8_t)servo0PhysAngle);
-  printServo0State();
+int16_t getRelTargetGerade(uint8_t ch) {
+  return (g_cfg[ch].divergingIsLeft == 1) ? g_cfg[ch].relMax : g_cfg[ch].relMin;
 }
 
-void setServo0Relative(int16_t rel) {
-  servo0RelAngle = clampRel(rel);
-
-  int16_t phys = servo0ZeroPhys + servo0RelAngle;
-  if (phys < 0) phys = 0;
-  if (phys > 180) phys = 180;
-  servo0PhysAngle = phys;
-
-  setServoAngle(0, (uint8_t)servo0PhysAngle);
-  printServo0State();
-}
-
-void moveServo0Relative(int16_t delta) {
-  setServo0Relative(servo0RelAngle + delta);
-}
-
-int16_t getRelTargetAbzweig() {
-  return divergingIsLeft ? servo0RelMin : servo0RelMax;
-}
-
-int16_t getRelTargetGerade() {
-  return divergingIsLeft ? servo0RelMax : servo0RelMin;
-}
-
-const __FlashStringHelper* getTurnoutStateText() {
-  if (servo0RelAngle == getRelTargetAbzweig()) return F("ABZWEIG");
-  if (servo0RelAngle == getRelTargetGerade()) return F("GERADE");
-  if (servo0RelAngle == 0) return F("MITTE");
+const __FlashStringHelper* getTurnoutStateText(uint8_t ch) {
+  if (g_relAngle[ch] == getRelTargetAbzweig(ch)) return F("ABZWEIG");
+  if (g_relAngle[ch] == getRelTargetGerade(ch)) return F("GERADE");
+  if (g_relAngle[ch] == 0) return F("MITTE");
   return F("ZWISCHEN");
 }
 
-void moveToAbzweig() {
-  Serial.println(F("Weiche -> ABZWEIG"));
-  setServo0Relative(getRelTargetAbzweig());
+void printServoState(uint8_t ch) {
+  Serial.print(F("Servo "));
+  Serial.print(ch);
+  Serial.print(F(": rel="));
+  Serial.print(g_relAngle[ch]);
+  Serial.print(F("°, phys="));
+  Serial.print(g_physAngle[ch]);
+  Serial.print(F("°, zeroPhys="));
+  Serial.print(g_cfg[ch].zeroPhys);
+  Serial.print(F("°, limits=["));
+  Serial.print(g_cfg[ch].relMin);
+  Serial.print(F(".."));
+  Serial.print(g_cfg[ch].relMax);
+  Serial.print(F("], abzweig="));
+  Serial.print(g_cfg[ch].divergingIsLeft ? F("links") : F("rechts"));
+  Serial.print(F(", stellung="));
+  Serial.println(getTurnoutStateText(ch));
 }
 
-void moveToGerade() {
-  Serial.println(F("Weiche -> GERADE"));
-  setServo0Relative(getRelTargetGerade());
+void setServoRelative(uint8_t ch, int16_t rel) {
+  if (ch >= SERVO_COUNT) return;
+
+  g_relAngle[ch] = clampRel(ch, rel);
+  int16_t phys = g_cfg[ch].zeroPhys + g_relAngle[ch];
+  if (phys < 0) phys = 0;
+  if (phys > 180) phys = 180;
+  g_physAngle[ch] = phys;
+
+  setServoAngleRaw(ch, (uint8_t)g_physAngle[ch]);
+  printServoState(ch);
+}
+
+void setServoPhysical(uint8_t ch, int16_t phys) {
+  if (ch >= SERVO_COUNT) return;
+  if (phys < 0) phys = 0;
+  if (phys > 180) phys = 180;
+
+  g_physAngle[ch] = phys;
+  int16_t rel = g_physAngle[ch] - g_cfg[ch].zeroPhys;
+  setServoRelative(ch, rel);
+}
+
+void setDefaultsForServo(uint8_t ch) {
+  g_cfg[ch].zeroPhys = 90;
+  g_cfg[ch].relMin = -40;
+  g_cfg[ch].relMax = 40;
+  g_cfg[ch].divergingIsLeft = 1;
+}
+
+void setDefaultsForAllServos() {
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    setDefaultsForServo(ch);
+  }
+}
+
+bool configIsValid(const EepromBlob &blob) {
+  if (blob.magic != CFG_MAGIC) return false;
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    const ServoConfig &c = blob.cfg[ch];
+    if (c.zeroPhys < 0 || c.zeroPhys > 180) return false;
+    if (c.relMin < -90 || c.relMin > 90) return false;
+    if (c.relMax < -90 || c.relMax > 90) return false;
+    if (c.relMin >= c.relMax) return false;
+    if (!(c.divergingIsLeft == 0 || c.divergingIsLeft == 1)) return false;
+  }
+  return true;
+}
+
+void saveConfig() {
+  EepromBlob blob;
+  blob.magic = CFG_MAGIC;
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    blob.cfg[ch] = g_cfg[ch];
+  }
+  EEPROM.put(CFG_ADDR, blob);
+  Serial.println(F("Konfiguration (alle 16 Servos) in EEPROM gespeichert."));
+}
+
+bool loadConfig() {
+  EepromBlob blob;
+  EEPROM.get(CFG_ADDR, blob);
+  if (!configIsValid(blob)) return false;
+
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    g_cfg[ch] = blob.cfg[ch];
+  }
+  return true;
 }
 
 char readNextTokenChar(uint16_t timeoutMs = 500) {
@@ -151,40 +166,6 @@ char readNextTokenChar(uint16_t timeoutMs = 500) {
   return 0;
 }
 
-bool configIsValid(const Servo0Config &cfg) {
-  if (cfg.magic != CFG_MAGIC) return false;
-  if (cfg.zeroPhys < 0 || cfg.zeroPhys > 180) return false;
-  if (cfg.relMin < -90 || cfg.relMin > 90) return false;
-  if (cfg.relMax < -90 || cfg.relMax > 90) return false;
-  if (cfg.relMin >= cfg.relMax) return false;
-  if (!(cfg.divergingIsLeft == 0 || cfg.divergingIsLeft == 1)) return false;
-  return true;
-}
-
-void saveConfig() {
-  Servo0Config cfg;
-  cfg.magic = CFG_MAGIC;
-  cfg.zeroPhys = servo0ZeroPhys;
-  cfg.relMin = servo0RelMin;
-  cfg.relMax = servo0RelMax;
-  cfg.divergingIsLeft = divergingIsLeft ? 1 : 0;
-  EEPROM.put(CFG_ADDR, cfg);
-  Serial.println(F("Konfiguration in EEPROM gespeichert."));
-}
-
-bool loadConfig() {
-  Servo0Config cfg;
-  EEPROM.get(CFG_ADDR, cfg);
-  if (configIsValid(cfg)) {
-    servo0ZeroPhys = cfg.zeroPhys;
-    servo0RelMin = cfg.relMin;
-    servo0RelMax = cfg.relMax;
-    divergingIsLeft = (cfg.divergingIsLeft == 1);
-    return true;
-  }
-  return false;
-}
-
 void scanI2C() {
   Serial.println(F("I2C-Scan startet..."));
   for (uint8_t addr = 1; addr < 127; addr++) {
@@ -196,38 +177,55 @@ void scanI2C() {
     }
   }
   Serial.println(F("I2C-Scan fertig."));
-  Serial.println(F("Status Servo 0:"));
-  printServo0State();
+  Serial.println(F("Aktiver Servo Status:"));
+  printServoState(g_activeServo);
+}
+
+void moveToAbzweig(uint8_t ch) {
+  Serial.print(F("Servo "));
+  Serial.print(ch);
+  Serial.println(F(" -> ABZWEIG"));
+  setServoRelative(ch, getRelTargetAbzweig(ch));
+}
+
+void moveToGerade(uint8_t ch) {
+  Serial.print(F("Servo "));
+  Serial.print(ch);
+  Serial.println(F(" -> GERADE"));
+  setServoRelative(ch, getRelTargetGerade(ch));
+}
+
+void testServo(uint8_t ch) {
+  Serial.print(F("Servo-"));
+  Serial.print(ch);
+  Serial.println(F("-Test startet (-30 <-> +30 rel)..."));
+  for (uint8_t i = 0; i < 6; i++) {
+    setServoRelative(ch, -30);
+    delay(700);
+    setServoRelative(ch, 30);
+    delay(700);
+  }
+  setServoRelative(ch, 0);
+  Serial.println(F("Servo-Test fertig."));
 }
 
 void printHelp() {
   Serial.println();
   Serial.println(F("Befehle (reduziert):"));
   Serial.println(F("  h              -> Hilfe"));
-  Serial.println(F("  s              -> I2C-Scan"));
-  Serial.println(F("  0              -> Servo 0 auf Mitte (rel 0)"));
+  Serial.println(F("  s              -> I2C-Scan + Status aktiver Servo"));
+  Serial.println(F("  u <0..15>      -> aktiven Servo waehlen"));
+  Serial.println(F("  0              -> aktiver Servo auf Mitte (rel 0)"));
   Serial.println(F("  p              -> Alias zu 0 (Mitte)"));
-  Serial.println(F("  1              -> Servo 0 auf linken Softlimit-Punkt"));
-  Serial.println(F("  2              -> Servo 0 auf rechten Softlimit-Punkt"));
-  Serial.println(F("  g              -> Weiche GERADE"));
-  Serial.println(F("  b              -> Weiche ABZWEIG"));
-  Serial.println(F("  o l|r          -> Abzweigseite setzen: links oder rechts"));
-  Serial.println(F("  f              -> Standardwerte: zero=90, limits=-40/+40"));
-  Serial.println(F("  t              -> Servo-0-Test (-30 <-> +30 rel)"));
-  Serial.println(F("  v              -> in EEPROM speichern"));
+  Serial.println(F("  1              -> aktiver Servo auf linken Softlimit-Punkt"));
+  Serial.println(F("  2              -> aktiver Servo auf rechten Softlimit-Punkt"));
+  Serial.println(F("  g              -> aktiver Servo auf GERADE"));
+  Serial.println(F("  b              -> aktiver Servo auf ABZWEIG"));
+  Serial.println(F("  o l|r          -> Abzweigseite fuer aktiven Servo setzen"));
+  Serial.println(F("  f              -> Standardwerte fuer ALLE Servos (zero=90, -40/+40)"));
+  Serial.println(F("  t              -> Testfahrt fuer aktiven Servo"));
+  Serial.println(F("  v              -> alle Servo-Konfigurationen speichern"));
   Serial.println();
-}
-
-void testServo0() {
-  Serial.println(F("Servo-0-Test startet (-30 <-> +30 rel)..."));
-  for (uint8_t i = 0; i < 6; i++) {
-    setServo0Relative(-30);
-    delay(700);
-    setServo0Relative(30);
-    delay(700);
-  }
-  setServo0Relative(0);
-  Serial.println(F("Servo-0-Test fertig."));
 }
 
 void setup() {
@@ -243,17 +241,18 @@ void setup() {
   Serial.println(F("PCA9685 Adresse: 0x40"));
   Serial.println(F("Hinweis: Externe 5V fuer Servo-V+ verwenden, GND gemeinsam."));
 
-  bool loadedFromEeprom = loadConfig();
-
-  if (loadedFromEeprom) {
-    Serial.println(F("EEPROM-Konfiguration gefunden und geladen."));
+  if (loadConfig()) {
+    Serial.println(F("EEPROM-Konfiguration (alle Servos) gefunden und geladen."));
   } else {
-    Serial.println(F("Keine gueltige EEPROM-Konfiguration, aktuelle Defaults aktiv."));
+    Serial.println(F("Keine gueltige EEPROM-Konfiguration. Defaults fuer alle Servos aktiv."));
+    setDefaultsForAllServos();
   }
 
-  calibrationMode = false;
-  setServo0Relative(0);  // beim Start IMMER zuerst Mitte
-  Serial.println(F("Startposition: Mitte (rel 0) gesetzt."));
+  // Beim Start IMMER zuerst Mitte fuer alle Servos
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    setServoRelative(ch, 0);
+  }
+  Serial.println(F("Startposition: alle Servos auf Mitte (rel 0) gesetzt."));
 
   scanI2C();
   printHelp();
@@ -263,50 +262,58 @@ void loop() {
   if (!Serial.available()) return;
   char cmd = Serial.read();
 
-  // Leerzeichen / CR / LF ignorieren (wichtig fuer Monitor mit CRLF)
   if (cmd == '\r' || cmd == '\n' || cmd == ' ' || cmd == '\t') return;
-
-  // Grossbuchstaben auf Kleinbuchstaben abbilden
   if (cmd >= 'A' && cmd <= 'Z') cmd = cmd - 'A' + 'a';
 
   if (cmd == 'h') {
     printHelp();
   } else if (cmd == 's') {
     scanI2C();
+  } else if (cmd == 'u') {
+    int ch = Serial.parseInt();
+    if (ch < 0 || ch >= SERVO_COUNT) {
+      Serial.println(F("Ungueltiger Servo. 0..15"));
+    } else {
+      g_activeServo = (uint8_t)ch;
+      Serial.print(F("Aktiver Servo gesetzt: "));
+      Serial.println(g_activeServo);
+      printServoState(g_activeServo);
+    }
   } else if (cmd == '0' || cmd == 'p') {
-    setServo0Relative(0);
+    setServoRelative(g_activeServo, 0);
   } else if (cmd == '1') {
-    setServo0Relative(servo0RelMin);
+    setServoRelative(g_activeServo, g_cfg[g_activeServo].relMin);
   } else if (cmd == '2') {
-    setServo0Relative(servo0RelMax);
+    setServoRelative(g_activeServo, g_cfg[g_activeServo].relMax);
   } else if (cmd == 'f') {
-    servo0ZeroPhys = 90;
-    servo0RelMin = -40;
-    servo0RelMax = 40;
-    divergingIsLeft = true;
-    Serial.println(F("Defaults gesetzt: zero=90, limits=-40/+40, abzweig=links"));
-    setServo0Relative(0);
+    setDefaultsForAllServos();
+    Serial.println(F("Defaults fuer alle Servos gesetzt: zero=90, limits=-40/+40, abzweig=links"));
+    for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) setServoRelative(ch, 0);
   } else if (cmd == 'g') {
-    moveToGerade();
+    moveToGerade(g_activeServo);
   } else if (cmd == 'b') {
-    moveToAbzweig();
+    moveToAbzweig(g_activeServo);
   } else if (cmd == 'o') {
     char side = readNextTokenChar();
     if (side == 'l') {
-      divergingIsLeft = true;
-      Serial.println(F("Abzweigseite gesetzt: links"));
-      printServo0State();
+      g_cfg[g_activeServo].divergingIsLeft = 1;
+      Serial.print(F("Servo "));
+      Serial.print(g_activeServo);
+      Serial.println(F(": Abzweigseite gesetzt: links"));
+      printServoState(g_activeServo);
     } else if (side == 'r') {
-      divergingIsLeft = false;
-      Serial.println(F("Abzweigseite gesetzt: rechts"));
-      printServo0State();
+      g_cfg[g_activeServo].divergingIsLeft = 0;
+      Serial.print(F("Servo "));
+      Serial.print(g_activeServo);
+      Serial.println(F(": Abzweigseite gesetzt: rechts"));
+      printServoState(g_activeServo);
     } else {
       Serial.println(F("Ungueltig. Nutzung: o l   oder   o r"));
     }
   } else if (cmd == 'v') {
     saveConfig();
   } else if (cmd == 't') {
-    testServo0();
+    testServo(g_activeServo);
   } else {
     Serial.print(F("Unbekannter Befehl: '"));
     Serial.print(cmd);
