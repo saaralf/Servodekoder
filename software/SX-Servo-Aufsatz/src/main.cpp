@@ -197,6 +197,8 @@ void scanI2C() {
     }
   }
   Serial.println(F("I2C-Scan fertig."));
+  Serial.println(F("Status Servo 0:"));
+  printServo0State();
 }
 
 void printHelp() {
