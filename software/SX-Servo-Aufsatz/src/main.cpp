@@ -16,8 +16,8 @@ int16_t servo0RelAngle = 0;   // -90..+90
 int16_t servo0PhysAngle = 90; // 0..180
 
 // Gelernte Softlimits (ohne Endschalter-Rückmeldung absolut wichtig)
-int16_t servo0RelMin = -60;
-int16_t servo0RelMax = 60;
+int16_t servo0RelMin = -35;
+int16_t servo0RelMax = 35;
 bool calibrationMode = false;  // true: volle -90..+90 zum Einlernen
 
 struct Servo0Config {
@@ -162,6 +162,7 @@ void printHelp() {
   Serial.println(F("  x <n>          -> Servo 0 absolut rel -90..+90"));
   Serial.println(F("  c 0 <w>        -> Servo 0 absolut phys 0..180"));
   Serial.println(F("  z <phys>       -> Nullpunkt setzen (0..180), z.B. z 90"));
+  Serial.println(F("  f              -> empfohlene Defaults: zero=90, limits=-35/+35"));
   Serial.println(F("  1              -> Servo 0 auf linken Softlimit-Punkt"));
   Serial.println(F("  2              -> Servo 0 auf rechten Softlimit-Punkt"));
   Serial.println(F("  k              -> Kalibriermodus EIN (volle -90..+90)"));
@@ -249,6 +250,12 @@ void loop() {
     servo0ZeroPhys = z;
     Serial.print(F("Neuer Zero-Phys gesetzt: "));
     Serial.println(servo0ZeroPhys);
+    setServo0Relative(0);
+  } else if (cmd == 'f') {
+    servo0ZeroPhys = 90;
+    servo0RelMin = -35;
+    servo0RelMax = 35;
+    Serial.println(F("Defaults gesetzt: zero=90, limits=-35/+35"));
     setServo0Relative(0);
   } else if (cmd == 'k') {
     calibrationMode = true;
