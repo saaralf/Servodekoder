@@ -8,7 +8,7 @@ const uint16_t SERVO_MIN_TICK = 110;  // physisch ~0°
 const uint16_t SERVO_MAX_TICK = 500;  // physisch ~180°
 
 const uint8_t SERVO_COUNT = 16;
-const uint8_t SERVO0_STEP = 2;  // feiner für Kalibrierung
+const uint8_t SERVO0_STEP = 1;  // feine Justierung mit +/-
 
 // Referenzpunkt für RELATIV-Winkel (0 = Mittelstellung)
 int16_t servo0ZeroPhys = 90;
@@ -16,8 +16,8 @@ int16_t servo0RelAngle = 0;   // -90..+90
 int16_t servo0PhysAngle = 90; // 0..180
 
 // Gelernte Softlimits (ohne Endschalter-Rückmeldung absolut wichtig)
-int16_t servo0RelMin = -35;
-int16_t servo0RelMax = 35;
+int16_t servo0RelMin = -40;
+int16_t servo0RelMax = 40;
 bool divergingIsLeft = true;   // true: Abzweig liegt auf linker Seite
 bool calibrationMode = false;  // true: volle -90..+90 zum Einlernen
 
@@ -193,14 +193,14 @@ void printHelp() {
   Serial.println(F("  s              -> I2C-Scan"));
   Serial.println(F("  p              -> Status Servo 0"));
   Serial.println(F("  0              -> Servo 0 auf rel 0"));
-  Serial.println(F("  +              -> Servo 0 +2 Grad (rel)"));
-  Serial.println(F("  -              -> Servo 0 -2 Grad (rel)"));
+  Serial.println(F("  +              -> Servo 0 +1 Grad (rel)"));
+  Serial.println(F("  -              -> Servo 0 -1 Grad (rel)"));
   Serial.println(F("  + <n>          -> Servo 0 +n Grad (rel)"));
   Serial.println(F("  - <n>          -> Servo 0 -n Grad (rel)"));
   Serial.println(F("  x <n>          -> Servo 0 absolut rel -90..+90"));
   Serial.println(F("  c 0 <w>        -> Servo 0 absolut phys 0..180"));
   Serial.println(F("  z <phys>       -> Nullpunkt setzen (0..180), z.B. z 90"));
-  Serial.println(F("  f              -> empfohlene Defaults: zero=90, limits=-35/+35"));
+  Serial.println(F("  f              -> empfohlene Defaults: zero=90, limits=-40/+40"));
   Serial.println(F("  g              -> Weiche GERADE (ziel = gegenueber Abzweigseite)"));
   Serial.println(F("  b              -> Weiche ABZWEIG (ziel = Schalterseite)"));
   Serial.println(F("  o l|r          -> Abzweigseite setzen: links oder rechts"));
@@ -275,12 +275,20 @@ void loop() {
     int step = Serial.parseInt();
     if (step <= 0) step = SERVO0_STEP;
     if (step > 90) step = 90;
+    int16_t before = servo0RelAngle;
     moveServo0Relative(step);
+    if (!calibrationMode && servo0RelAngle == before) {
+      Serial.println(F("Softlimit erreicht. Fuer weitere Justage zuerst 'k' (Kalibriermodus)."));
+    }
   } else if (cmd == '-') {
     int step = Serial.parseInt();
     if (step <= 0) step = SERVO0_STEP;
     if (step > 90) step = 90;
+    int16_t before = servo0RelAngle;
     moveServo0Relative(-step);
+    if (!calibrationMode && servo0RelAngle == before) {
+      Serial.println(F("Softlimit erreicht. Fuer weitere Justage zuerst 'k' (Kalibriermodus)."));
+    }
   } else if (cmd == 'x') {
     int rel = Serial.parseInt();
     setServo0Relative(rel);
@@ -294,10 +302,10 @@ void loop() {
     setServo0Relative(0);
   } else if (cmd == 'f') {
     servo0ZeroPhys = 90;
-    servo0RelMin = -35;
-    servo0RelMax = 35;
+    servo0RelMin = -40;
+    servo0RelMax = 40;
     divergingIsLeft = true;
-    Serial.println(F("Defaults gesetzt: zero=90, limits=-35/+35, abzweig=links"));
+    Serial.println(F("Defaults gesetzt: zero=90, limits=-40/+40, abzweig=links"));
     setServo0Relative(0);
   } else if (cmd == 'g') {
     moveToGerade();
