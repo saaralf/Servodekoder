@@ -6,15 +6,14 @@
 Adafruit_PWMServoDriver pwm = Adafruit_PWMServoDriver(0x40);
 
 // ---------- Servo-Kalibrierung ----------
-// Diese Werte pro Servo ggf. anpassen!
 // 50Hz => 20ms Periode, 12-bit -> 4096 Ticks
 // Typisch: 0.5ms..2.5ms => ca. 102..512 Ticks
-const uint16_t SERVO_MIN_TICK = 110;  // ~0°
-const uint16_t SERVO_MAX_TICK = 500;  // ~180°
+const uint16_t SERVO_MIN_TICK = 110;  // physisch ~0°
+const uint16_t SERVO_MAX_TICK = 500;  // physisch ~180°
 
 const uint8_t SERVO_COUNT = 16;
-const uint8_t SERVO0_STEP = 5;   // Schrittweite fuer +/-
-uint8_t servo0Angle = 0;          // Grundstellung Servo 0
+const uint8_t SERVO0_STEP = 5;        // Schrittweite für +/-
+int8_t servo0SignedAngle = 0;         // -90..+90, 0 = Mittelstellung
 
 uint16_t angleToTick(uint8_t angle) {
   if (angle > 180) angle = 180;
@@ -33,19 +32,36 @@ void allServos(uint8_t angle) {
   }
 }
 
-void setServo0Absolute(uint8_t angle) {
-  if (angle > 180) angle = 180;
-  servo0Angle = angle;
-  setServoAngle(0, servo0Angle);
-  Serial.print(F("Servo 0 -> "));
-  Serial.println(servo0Angle);
+void setServo0Signed(int16_t signedAngle) {
+  if (signedAngle < -90) signedAngle = -90;
+  if (signedAngle > 90) signedAngle = 90;
+
+  servo0SignedAngle = (int8_t)signedAngle;
+  uint8_t physicalAngle = (uint8_t)(servo0SignedAngle + 90);  // -90..+90 -> 0..180
+  setServoAngle(0, physicalAngle);
+
+  Serial.print(F("Servo 0 signed -> "));
+  Serial.print(servo0SignedAngle);
+  Serial.print(F(" (phys="));
+  Serial.print(physicalAngle);
+  Serial.println(F("°)"));
+}
+
+void setServo0Physical(uint8_t physicalAngle) {
+  if (physicalAngle > 180) physicalAngle = 180;
+  setServoAngle(0, physicalAngle);
+  servo0SignedAngle = (int8_t)physicalAngle - 90;
+
+  Serial.print(F("Servo 0 phys -> "));
+  Serial.print(physicalAngle);
+  Serial.print(F(" (signed="));
+  Serial.print(servo0SignedAngle);
+  Serial.println(F(")"));
 }
 
 void moveServo0Relative(int8_t delta) {
-  int next = (int)servo0Angle + delta;
-  if (next < 0) next = 0;
-  if (next > 180) next = 180;
-  setServo0Absolute((uint8_t)next);
+  int16_t next = (int16_t)servo0SignedAngle + delta;
+  setServo0Signed(next);
 }
 
 void scanI2C() {
@@ -66,15 +82,16 @@ void printHelp() {
   Serial.println(F("Befehle:"));
   Serial.println(F("  h              -> Hilfe"));
   Serial.println(F("  s              -> I2C-Scan"));
-  Serial.println(F("  a <winkel>     -> alle 16 Servos auf Winkel (0..180)"));
-  Serial.println(F("  c <ch> <w>     -> Kanal ch (0..15) auf Winkel w (0..180)"));
+  Serial.println(F("  a <winkel>     -> alle 16 Servos auf Winkel (0..180 physisch)"));
+  Serial.println(F("  c <ch> <w>     -> Kanal ch (0..15) auf Winkel w (0..180 physisch)"));
   Serial.println(F("  d              -> Demofahrt"));
-  Serial.println(F("  t              -> Servo-0-Test (30/150 Grad)"));
-  Serial.println(F("  0              -> Servo 0 auf Grundstellung 0 Grad"));
-  Serial.println(F("  +              -> Servo 0 +5 Grad"));
-  Serial.println(F("  -              -> Servo 0 -5 Grad"));
-  Serial.println(F("  + <n>          -> Servo 0 +n Grad (z.B. + 30)"));
-  Serial.println(F("  - <n>          -> Servo 0 -n Grad (z.B. - 30)"));
+  Serial.println(F("  t              -> Servo-0-Test (-30/+30)"));
+  Serial.println(F("  0              -> Servo 0 auf signed 0 (Mitte)"));
+  Serial.println(F("  +              -> Servo 0 +5 Grad (signed)"));
+  Serial.println(F("  -              -> Servo 0 -5 Grad (signed)"));
+  Serial.println(F("  + <n>          -> Servo 0 +n Grad (signed, z.B. + 30)"));
+  Serial.println(F("  - <n>          -> Servo 0 -n Grad (signed, z.B. - 30)"));
+  Serial.println(F("  x <n>          -> Servo 0 absolut signed -90..+90"));
   Serial.println();
 }
 
@@ -91,15 +108,15 @@ void demoSweep() {
 }
 
 void testServo0() {
-  Serial.println(F("Servo-0-Test startet (30 <-> 150 Grad)..."));
+  Serial.println(F("Servo-0-Test startet (-30 <-> +30)..."));
   for (uint8_t i = 0; i < 6; i++) {
-    setServo0Absolute(30);
+    setServo0Signed(-30);
     delay(700);
-    setServo0Absolute(150);
+    setServo0Signed(30);
     delay(700);
   }
-  setServo0Absolute(0);
-  Serial.println(F("Servo-0-Test fertig. Servo 0 steht auf 0 Grad."));
+  setServo0Signed(0);
+  Serial.println(F("Servo-0-Test fertig. Servo 0 steht auf signed 0."));
 }
 
 void setup() {
@@ -109,7 +126,6 @@ void setup() {
   Wire.begin();  // A4=SDA, A5=SCL am Pro Mini
   pwm.begin();
   pwm.setPWMFreq(50);  // Servo-typisch 50Hz
-
   delay(10);
 
   Serial.println(F("ServoTest fuer PCA9685 gestartet."));
@@ -118,8 +134,8 @@ void setup() {
 
   scanI2C();
 
-  // Grundstellung: Servo 0 auf 0 Grad
-  setServo0Absolute(0);
+  // Grundstellung: signed 0 (Mitte)
+  setServo0Signed(0);
   printHelp();
 }
 
@@ -137,23 +153,26 @@ void loop() {
   } else if (cmd == 't') {
     testServo0();
   } else if (cmd == '0') {
-    setServo0Absolute(0);
+    setServo0Signed(0);
   } else if (cmd == '+') {
     int step = Serial.parseInt();
     if (step <= 0) step = SERVO0_STEP;
-    if (step > 180) step = 180;
+    if (step > 90) step = 90;
     moveServo0Relative((int8_t)step);
   } else if (cmd == '-') {
     int step = Serial.parseInt();
     if (step <= 0) step = SERVO0_STEP;
-    if (step > 180) step = 180;
+    if (step > 90) step = 90;
     moveServo0Relative((int8_t)(-step));
+  } else if (cmd == 'x') {
+    int signedAngle = Serial.parseInt();
+    setServo0Signed(signedAngle);
   } else if (cmd == 'a') {
     int w = Serial.parseInt();
     if (w < 0) w = 0;
     if (w > 180) w = 180;
     allServos((uint8_t)w);
-    Serial.print(F("Alle Servos -> "));
+    Serial.print(F("Alle Servos -> phys "));
     Serial.println(w);
   } else if (cmd == 'c') {
     int ch = Serial.parseInt();
@@ -164,14 +183,15 @@ void loop() {
     }
     if (w < 0) w = 0;
     if (w > 180) w = 180;
+
     if (ch == 0) {
-      setServo0Absolute((uint8_t)w);
+      setServo0Physical((uint8_t)w);
     } else {
       setServoAngle((uint8_t)ch, (uint8_t)w);
+      Serial.print(F("Kanal "));
+      Serial.print(ch);
+      Serial.print(F(" -> phys "));
+      Serial.println(w);
     }
-    Serial.print(F("Kanal "));
-    Serial.print(ch);
-    Serial.print(F(" -> "));
-    Serial.println(w);
   }
 }
