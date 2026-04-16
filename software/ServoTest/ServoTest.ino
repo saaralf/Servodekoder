@@ -73,6 +73,8 @@ void printHelp() {
   Serial.println(F("  0              -> Servo 0 auf Grundstellung 0 Grad"));
   Serial.println(F("  +              -> Servo 0 +5 Grad"));
   Serial.println(F("  -              -> Servo 0 -5 Grad"));
+  Serial.println(F("  + <n>          -> Servo 0 +n Grad (z.B. + 30)"));
+  Serial.println(F("  - <n>          -> Servo 0 -n Grad (z.B. - 30)"));
   Serial.println();
 }
 
@@ -137,9 +139,15 @@ void loop() {
   } else if (cmd == '0') {
     setServo0Absolute(0);
   } else if (cmd == '+') {
-    moveServo0Relative(SERVO0_STEP);
+    int step = Serial.parseInt();
+    if (step <= 0) step = SERVO0_STEP;
+    if (step > 180) step = 180;
+    moveServo0Relative((int8_t)step);
   } else if (cmd == '-') {
-    moveServo0Relative(-SERVO0_STEP);
+    int step = Serial.parseInt();
+    if (step <= 0) step = SERVO0_STEP;
+    if (step > 180) step = 180;
+    moveServo0Relative((int8_t)(-step));
   } else if (cmd == 'a') {
     int w = Serial.parseInt();
     if (w < 0) w = 0;
