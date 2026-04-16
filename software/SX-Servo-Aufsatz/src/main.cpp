@@ -32,6 +32,10 @@ struct Servo0Config {
 const uint16_t CFG_MAGIC = 0x5A31;
 const int CFG_ADDR = 0;
 
+int16_t getRelTargetAbzweig();
+int16_t getRelTargetGerade();
+const __FlashStringHelper* getTurnoutStateText();
+
 uint16_t angleToTick(uint8_t angle) {
   if (angle > 180) angle = 180;
   return map(angle, 0, 180, SERVO_MIN_TICK, SERVO_MAX_TICK);
@@ -70,6 +74,8 @@ void printServo0State() {
   Serial.print(servo0RelMax);
   Serial.print(F("], abzweig="));
   Serial.print(divergingIsLeft ? F("links") : F("rechts"));
+  Serial.print(F(", stellung="));
+  Serial.print(getTurnoutStateText());
   Serial.print(F(", mode="));
   Serial.println(calibrationMode ? F("CAL") : F("RUN"));
 }
@@ -113,6 +119,13 @@ int16_t getRelTargetAbzweig() {
 
 int16_t getRelTargetGerade() {
   return divergingIsLeft ? servo0RelMax : servo0RelMin;
+}
+
+const __FlashStringHelper* getTurnoutStateText() {
+  if (servo0RelAngle == getRelTargetAbzweig()) return F("ABZWEIG");
+  if (servo0RelAngle == getRelTargetGerade()) return F("GERADE");
+  if (servo0RelAngle == 0) return F("MITTE");
+  return F("ZWISCHEN");
 }
 
 void moveToAbzweig() {
