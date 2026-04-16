@@ -13,6 +13,8 @@ const uint16_t SERVO_MIN_TICK = 110;  // ~0°
 const uint16_t SERVO_MAX_TICK = 500;  // ~180°
 
 const uint8_t SERVO_COUNT = 16;
+const uint8_t SERVO0_STEP = 5;   // Schrittweite fuer +/-
+uint8_t servo0Angle = 0;          // Grundstellung Servo 0
 
 uint16_t angleToTick(uint8_t angle) {
   if (angle > 180) angle = 180;
@@ -29,6 +31,21 @@ void allServos(uint8_t angle) {
   for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
     setServoAngle(ch, angle);
   }
+}
+
+void setServo0Absolute(uint8_t angle) {
+  if (angle > 180) angle = 180;
+  servo0Angle = angle;
+  setServoAngle(0, servo0Angle);
+  Serial.print(F("Servo 0 -> "));
+  Serial.println(servo0Angle);
+}
+
+void moveServo0Relative(int8_t delta) {
+  int next = (int)servo0Angle + delta;
+  if (next < 0) next = 0;
+  if (next > 180) next = 180;
+  setServo0Absolute((uint8_t)next);
 }
 
 void scanI2C() {
@@ -53,6 +70,9 @@ void printHelp() {
   Serial.println(F("  c <ch> <w>     -> Kanal ch (0..15) auf Winkel w (0..180)"));
   Serial.println(F("  d              -> Demofahrt"));
   Serial.println(F("  t              -> Servo-0-Test (30/150 Grad)"));
+  Serial.println(F("  0              -> Servo 0 auf Grundstellung 0 Grad"));
+  Serial.println(F("  +              -> Servo 0 +5 Grad"));
+  Serial.println(F("  -              -> Servo 0 -5 Grad"));
   Serial.println();
 }
 
@@ -71,13 +91,13 @@ void demoSweep() {
 void testServo0() {
   Serial.println(F("Servo-0-Test startet (30 <-> 150 Grad)..."));
   for (uint8_t i = 0; i < 6; i++) {
-    setServoAngle(0, 30);
+    setServo0Absolute(30);
     delay(700);
-    setServoAngle(0, 150);
+    setServo0Absolute(150);
     delay(700);
   }
-  setServoAngle(0, 90);
-  Serial.println(F("Servo-0-Test fertig. Servo 0 steht auf 90 Grad."));
+  setServo0Absolute(0);
+  Serial.println(F("Servo-0-Test fertig. Servo 0 steht auf 0 Grad."));
 }
 
 void setup() {
@@ -96,8 +116,8 @@ void setup() {
 
   scanI2C();
 
-  // sichere Startposition
-  allServos(90);
+  // Grundstellung: Servo 0 auf 0 Grad
+  setServo0Absolute(0);
   printHelp();
 }
 
@@ -114,6 +134,12 @@ void loop() {
     demoSweep();
   } else if (cmd == 't') {
     testServo0();
+  } else if (cmd == '0') {
+    setServo0Absolute(0);
+  } else if (cmd == '+') {
+    moveServo0Relative(SERVO0_STEP);
+  } else if (cmd == '-') {
+    moveServo0Relative(-SERVO0_STEP);
   } else if (cmd == 'a') {
     int w = Serial.parseInt();
     if (w < 0) w = 0;
@@ -130,7 +156,11 @@ void loop() {
     }
     if (w < 0) w = 0;
     if (w > 180) w = 180;
-    setServoAngle((uint8_t)ch, (uint8_t)w);
+    if (ch == 0) {
+      setServo0Absolute((uint8_t)w);
+    } else {
+      setServoAngle((uint8_t)ch, (uint8_t)w);
+    }
     Serial.print(F("Kanal "));
     Serial.print(ch);
     Serial.print(F(" -> "));
