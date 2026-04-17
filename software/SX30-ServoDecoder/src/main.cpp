@@ -39,6 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 // ---------------- SX Kanalgrenzen ----------------
+const uint8_t SX_ADDR_DISABLED = 0;
 const uint8_t SX_ADDR_MIN = 1;
 const uint8_t SX_ADDR_MAX = 111;
 
@@ -84,6 +85,14 @@ uint16_t angleToTick(uint8_t angle) {
 
 bool validSxAddr(uint8_t a) {
   return (a >= SX_ADDR_MIN && a <= SX_ADDR_MAX);
+}
+
+bool validOrDisabledSxAddr(uint8_t a) {
+  return (a == SX_ADDR_DISABLED) || validSxAddr(a);
+}
+
+bool sxAddrEnabled(uint8_t a) {
+  return validSxAddr(a);
 }
 
 int16_t clampRel(uint8_t ch, int16_t rel) {
@@ -132,12 +141,16 @@ void applyBitToServo(uint8_t ch, uint8_t bitVal) {
   else moveGerade(ch);
 }
 
-void applyAllFromSx(uint8_t dataA, uint8_t dataB) {
-  for (uint8_t i = 0; i < 8; i++) {
-    applyBitToServo(i, bitRead(dataA, i));
+void applyAllFromSx(uint8_t dataA, uint8_t dataB, bool useA, bool useB) {
+  if (useA) {
+    for (uint8_t i = 0; i < 8; i++) {
+      applyBitToServo(i, bitRead(dataA, i));
+    }
   }
-  for (uint8_t i = 0; i < 8; i++) {
-    applyBitToServo(i + 8, bitRead(dataB, i));
+  if (useB) {
+    for (uint8_t i = 0; i < 8; i++) {
+      applyBitToServo(i + 8, bitRead(dataB, i));
+    }
   }
 }
 
@@ -155,7 +168,9 @@ void setDefaults() {
 
 bool configValid(const DecoderCfg &c) {
   if (c.magic != CFG_MAGIC) return false;
-  if (!validSxAddr(c.sxAddrA) || !validSxAddr(c.sxAddrB)) return false;
+  if (!validOrDisabledSxAddr(c.sxAddrA) || !validOrDisabledSxAddr(c.sxAddrB)) return false;
+  // Mindestens eine SX-Adresse muss aktiv sein
+  if (!sxAddrEnabled(c.sxAddrA) && !sxAddrEnabled(c.sxAddrB)) return false;
 
   for (uint8_t i = 0; i < SERVO_COUNT; i++) {
     const ServoCfg &s = c.servo[i];
@@ -240,8 +255,20 @@ void finishModuleProgramming() {
   uint8_t lowMask = sx.get(SX_CHAN_ORIENT_L);
   uint8_t highMask = sx.get(SX_CHAN_ORIENT_H);
 
-  if (validSxAddr(newA)) cfg.sxAddrA = newA;
-  if (validSxAddr(newB)) cfg.sxAddrB = newB;
+  uint8_t candA = cfg.sxAddrA;
+  uint8_t candB = cfg.sxAddrB;
+
+  if (validOrDisabledSxAddr(newA)) candA = newA;
+  if (validOrDisabledSxAddr(newB)) candB = newB;
+
+  // Sicherheit: nie beide Adressen deaktivieren
+  if (!sxAddrEnabled(candA) && !sxAddrEnabled(candB)) {
+    // falls beide 0 wurden, Konfiguration unverändert lassen
+  } else {
+    cfg.sxAddrA = candA;
+    cfg.sxAddrB = candB;
+  }
+
   setOrientationFromMasks(lowMask, highMask);
 
   saveConfig();
@@ -279,19 +306,28 @@ void setup() {
   attachInterrupt(0, sxisr, CHANGE);
 
   // aktuellen SX-Zustand direkt übernehmen
-  oldDataA = sx.get(cfg.sxAddrA);
-  oldDataB = sx.get(cfg.sxAddrB);
-  applyAllFromSx(oldDataA, oldDataB);
+  bool useA = sxAddrEnabled(cfg.sxAddrA);
+  bool useB = sxAddrEnabled(cfg.sxAddrB);
+  oldDataA = useA ? sx.get(cfg.sxAddrA) : 0;
+  oldDataB = useB ? sx.get(cfg.sxAddrB) : 0;
+  applyAllFromSx(oldDataA, oldDataB, useA, useB);
 }
 
 void loop() {
-  uint8_t dA = sx.get(cfg.sxAddrA);
-  uint8_t dB = sx.get(cfg.sxAddrB);
+  bool useA = sxAddrEnabled(cfg.sxAddrA);
+  bool useB = sxAddrEnabled(cfg.sxAddrB);
 
-  if (dA != oldDataA || dB != oldDataB) {
-    applyAllFromSx(dA, dB);
-    oldDataA = dA;
-    oldDataB = dB;
+  uint8_t dA = useA ? sx.get(cfg.sxAddrA) : oldDataA;
+  uint8_t dB = useB ? sx.get(cfg.sxAddrB) : oldDataB;
+
+  bool changed = false;
+  if (useA && dA != oldDataA) changed = true;
+  if (useB && dB != oldDataB) changed = true;
+
+  if (changed) {
+    applyAllFromSx(dA, dB, useA, useB);
+    if (useA) oldDataA = dA;
+    if (useB) oldDataB = dB;
   }
 
   uint8_t track = sx.getTrackBit();

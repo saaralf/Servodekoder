@@ -10,6 +10,8 @@ Code-Datei:
 - 2 SX-Adressen für Fahrbetrieb:
   - `sxAddrA` steuert Servo 0..7 (Bit 0..7)
   - `sxAddrB` steuert Servo 8..15 (Bit 0..7)
+  - Falls nur eine Adresse programmiert ist und die andere auf `0` steht,
+    arbeitet der Decoder nur mit 8 Servos (die zugehörige Adresshälfte bleibt aktiv).
 - Bit-Bedeutung im Fahrbetrieb:
   - `0 = Gerade`
   - `1 = Abzweig`
