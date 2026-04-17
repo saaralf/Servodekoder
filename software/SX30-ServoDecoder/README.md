@@ -1,6 +1,9 @@
 # SX30-ServoDecoder (Basisplatine 3.0 + ServoAufsatz)
 
-Dieses Arduino-Sketch steuert 16 Servos über den SX-Bus mit der SX30-Library.
+Dieses Arduino/PlatformIO-Projekt steuert 16 Servos über den SX-Bus mit der SX30-Library.
+
+Code-Datei:
+- `src/main.cpp`
 
 ## Funktionen
 - 16 Servos über PCA9685 (Adresse 0x40)
