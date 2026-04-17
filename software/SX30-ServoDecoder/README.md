@@ -36,3 +36,7 @@ Beim Beenden werden diese Werte übernommen und im EEPROM gespeichert.
 - Nullpunkt pro Servo: physisch 90
 
 Hinweis: Für die individuellen Limits/Nullpunkte pro Servo ist üblicherweise ein separates Kalibrier-Tool sinnvoll (z. B. dein Testprogramm). Dieses Fahrprogramm übernimmt die gespeicherten Werte und läuft dann autark.
+
+## Library-Bereitstellung
+- `SX30` ist projektlokal eingebunden unter `lib/SX30`.
+- Damit ist das Projekt in PlatformIO ohne externen Pfad (`/home/michael/SX30`) baubar.
