@@ -39,6 +39,8 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 const bool SERVO_RELAX_AFTER_MOVE = true;
 const uint16_t SERVO_RELAX_MS = 700;
+const bool DEBUG_RELAX_LOG = false;
+const bool DEBUG_PROG_RX = true;
 
 // ---------------- SX Kanalgrenzen ----------------
 const uint8_t SX_ADDR_DISABLED = 0;
@@ -52,6 +54,8 @@ const uint8_t SX_CHAN_ADDR_A    = 1;
 const uint8_t SX_CHAN_ADDR_B    = 2;
 const uint8_t SX_CHAN_ORIENT_L  = 3;   // Servo 0..7:  1=Abzweig links, 0=rechts
 const uint8_t SX_CHAN_ORIENT_H  = 4;   // Servo 8..15: 1=Abzweig links, 0=rechts
+const uint8_t SX_CHAN_TEST_SERVO = 100; // 0..15 (dedizierter Testkanal)
+const uint8_t SX_CHAN_TEST_CMD   = 101; // 2=Mitte,3=Gerade,4=Abzweig
 
 // ---------------- EEPROM ----------------
 const uint16_t CFG_MAGIC = 0x5A41;
@@ -78,6 +82,8 @@ bool programming = false;
 uint32_t keyPressTime = 0;
 uint8_t oldDataA = 0xFF;
 uint8_t oldDataB = 0xFF;
+uint8_t lastTestCmd = 0;
+uint32_t lastProgDebugMs = 0;
 uint32_t relaxUntil[SERVO_COUNT] = {0};
 bool servoPwmEnabled[SERVO_COUNT] = {false};
 
@@ -253,6 +259,9 @@ void startModuleProgramming() {
   while (sx.set(SX_CHAN_ADDR_B, cfg.sxAddrB) != 0) delay(10);
   while (sx.set(SX_CHAN_ORIENT_L, getOrientationMaskLow()) != 0) delay(10);
   while (sx.set(SX_CHAN_ORIENT_H, getOrientationMaskHigh()) != 0) delay(10);
+  while (sx.set(SX_CHAN_TEST_SERVO, 0) != 0) delay(10);
+  while (sx.set(SX_CHAN_TEST_CMD, 0) != 0) delay(10);
+  lastTestCmd = 0;
 }
 
 void finishModuleProgramming() {
@@ -290,9 +299,11 @@ void serviceServoRelax() {
     if (servoPwmEnabled[ch] && relaxUntil[ch] != 0) {
       if ((int32_t)(now - relaxUntil[ch]) >= 0) {
         pwm.setPWM(ch, 0, 0); // PWM aus -> Servo stromlos/relaxed
-        Serial.print(F("Servo "));
-        Serial.print(ch);
-        Serial.println(F(" RELAX: PWM AUS (stromlos)"));
+        if (DEBUG_RELAX_LOG) {
+          Serial.print(F("Servo "));
+          Serial.print(ch);
+          Serial.println(F(" RELAX: PWM AUS (stromlos)"));
+        }
         servoPwmEnabled[ch] = false;
         relaxUntil[ch] = 0;
       }
@@ -364,6 +375,30 @@ void loop() {
   uint8_t track = sx.getTrackBit();
 
   if (programming) {
+    uint8_t tcmd = sx.get(SX_CHAN_TEST_CMD);
+    uint8_t sNow = sx.get(SX_CHAN_TEST_SERVO);
+
+    if (DEBUG_PROG_RX && (millis() - lastProgDebugMs) > 500) {
+      lastProgDebugMs = millis();
+      Serial.print(F("PROG RX: Track=")); Serial.print(track);
+      Serial.print(F(" K3=")); Serial.print(sNow);
+      Serial.print(F(" K6=")); Serial.println(tcmd);
+    }
+
+    if (tcmd != 0 && tcmd != lastTestCmd) {
+      uint8_t s = sNow;
+      Serial.print(F("RX TEST CMD=")); Serial.print(tcmd);
+      Serial.print(F(" SERVO=")); Serial.println(s);
+      if (s < SERVO_COUNT) {
+        if (tcmd == 2) { setServoRel(s, 0); Serial.print(F("TEST S")); Serial.print(s); Serial.println(F(" MITTE")); }
+        else if (tcmd == 3) { applyBitToServo(s, 0); Serial.print(F("TEST S")); Serial.print(s); Serial.println(F(" GERADE")); }
+        else if (tcmd == 4) { applyBitToServo(s, 1); Serial.print(F("TEST S")); Serial.print(s); Serial.println(F(" ABZWEIG")); }
+      }
+      lastTestCmd = tcmd;
+      while (sx.set(SX_CHAN_TEST_CMD, 0) != 0) delay(2);
+      lastTestCmd = 0;
+    }
+
     if (track || keypressed()) {
       // Ende Programmiermodus bei Track EIN oder erneutem Tastendruck
       finishModuleProgramming();
