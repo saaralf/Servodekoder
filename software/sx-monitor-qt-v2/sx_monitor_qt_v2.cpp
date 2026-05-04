@@ -182,6 +182,59 @@ public:
         progL->addWidget(progStatusLbl);
 
         tabs->addTab(progTab, "Servo-Programmer");
+
+        auto *visualTab = new QWidget;
+        auto *visualL = new QVBoxLayout(visualTab);
+        auto *visualTop = new QHBoxLayout;
+        auto *visualHint = new QLabel("V2: 16 Servos (2x8). Pro Kachel: -, +, Mitte, Links speichern, Rechts speichern");
+        visualTop->addWidget(visualHint);
+        visualL->addLayout(visualTop);
+
+        auto pulseMove = [this](int servo, int move){
+            int bus=(sendBusBox->currentText()=="SX1")?1:0;
+            int step=progStep->currentText().toInt();
+            sendSX(bus,11,servo); sendSX(bus,12,step); sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
+        };
+        auto pulseStore = [this](int servo, int store){
+            int bus=(sendBusBox->currentText()=="SX1")?1:0;
+            sendSX(bus,11,servo); sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
+        };
+
+        auto *grid = new QGridLayout;
+        for(int s=0; s<16; ++s){
+            servoArmPos[s] = 0;
+            auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
+            auto *bl = new QVBoxLayout(box);
+            auto *arm = new QLabel("Arm: ----|----  (0)");
+            arm->setStyleSheet("font-family: monospace;");
+            servoArmLabels[s] = arm;
+            bl->addWidget(arm);
+
+            auto *row1 = new QHBoxLayout;
+            auto *bMinus = new QPushButton("-");
+            auto *bMid = new QPushButton("Mitte");
+            auto *bPlus = new QPushButton("+");
+            row1->addWidget(bMinus); row1->addWidget(bMid); row1->addWidget(bPlus);
+            bl->addLayout(row1);
+
+            auto *row2 = new QHBoxLayout;
+            auto *bL = new QPushButton("Links speichern");
+            auto *bR = new QPushButton("Rechts speichern");
+            row2->addWidget(bL); row2->addWidget(bR);
+            bl->addLayout(row2);
+
+            connect(bMinus,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,1); servoArmPos[s]-=5; updateServoArmLabel(s); appendLog(QString("V2 S%1 -").arg(s+1)); });
+            connect(bPlus,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,2); servoArmPos[s]+=5; updateServoArmLabel(s); appendLog(QString("V2 S%1 +").arg(s+1)); });
+            connect(bMid,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,3); servoArmPos[s]=0; updateServoArmLabel(s); appendLog(QString("V2 S%1 Mitte").arg(s+1)); });
+            connect(bL,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,1); appendLog(QString("V2 S%1 Links speichern").arg(s+1)); });
+            connect(bR,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,2); appendLog(QString("V2 S%1 Rechts speichern").arg(s+1)); });
+
+            int r = s/8;
+            int c = s%8;
+            grid->addWidget(box, r, c);
+        }
+        visualL->addLayout(grid);
+        tabs->addTab(visualTab, "Servo-Bildansicht V2");
         root->addWidget(tabs);
 
         auto *sendBox = new QGroupBox("SX senden");
@@ -421,6 +474,15 @@ private:
     }
 
     void appendLog(const QString& s){ logView->append(s); }
+    void updateServoArmLabel(int s){
+        if(s<0 || s>=16 || !servoArmLabels[s]) return;
+        if(servoArmPos[s] < -90) servoArmPos[s] = -90;
+        if(servoArmPos[s] > 90) servoArmPos[s] = 90;
+        int idx = (servoArmPos[s] + 90) / 20;
+        QString bar = "----------";
+        if(idx>=0 && idx<bar.size()) bar[idx] = '|';
+        servoArmLabels[s]->setText(QString("Arm: %1  (%2)").arg(bar).arg(servoArmPos[s]));
+    }
 
     QComboBox *ifaceBox{}, *busBox{};
     QCheckBox *bitOrderBox{};
@@ -434,6 +496,8 @@ private:
     QComboBox *progStep{};
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
     QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{};
+    QLabel* servoArmLabels[16]{};
+    int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
     QTextEdit *logView{};
