@@ -338,6 +338,7 @@ bool setupValidateAll() {
 void startInitialSetup(bool fromSxWizard = false) {
   setupMode = true;
   setupBySxWizard = fromSxWizard;
+  digitalWrite(PROGLED, HIGH); // D13: Einstellmodus aktiv
   setupStep = 5;
   sxSetupLastCmd = fromSxWizard ? sx.get(SX_CHAN_SETUP_CMD) : 0;
   sxSetupLastServo = fromSxWizard ? sx.get(SX_CHAN_SETUP_SERVO) : 0;
@@ -382,12 +383,14 @@ void processSetupSerial() {
         } else {
           saveConfig();
           setupMode = false;
+          digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
           setupAck(1);
           Serial.println(F("Setup gespeichert, beendet."));
         }
       } break;
       case 'x':
         setupMode = false;
+        digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
         setupAck(0);
         Serial.println(F("Setup beendet ohne Speichern."));
         break;
@@ -482,7 +485,7 @@ void setup() {
 
   Serial.println();
   Serial.println(F("SX30 ServoDecoder start"));
-  Serial.println(F("FW-Version: SX30-ServoDecoder 2026-05-04f"));
+  Serial.println(F("FW-Version: SX30-ServoDecoder 2026-05-04g"));
   Serial.println(loadedFromEeprom ? F("CFG: aus EEPROM geladen") : F("CFG: Defaults genutzt"));
   Serial.println(F("Setup starten: 's' senden"));
 
@@ -515,11 +518,13 @@ void processSetupSxWizard() {
       setupAck(1);
     } else if (cmd == 2) {
       setupMode = false;
+      digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
       setupAck(0);
     } else if (cmd == 3) {
       if (setupValidateAll()) {
         saveConfig();
         setupMode = false;
+        digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
         setupAck(1);
       } else {
         setupAck(2);

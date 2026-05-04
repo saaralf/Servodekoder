@@ -39,10 +39,12 @@ GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 8) Im Betrieb über Fahrdaten 0/1 die gespeicherten Endlagen anfahren.
 
 ## Nächste Schritte
-1. Optional Servo-Relax als schaltbare Option ergänzen.
-2. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
+1. QT-Rückmeldung für lokalen Prog-Tastendruck ergänzen (klarer Statuskanal/ACK: "Prog aktiv/inaktiv").
+2. Optional Servo-Relax als schaltbare Option ergänzen.
+3. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
 
 ## Laufender Status
 - 2026-05-04: Todo.md erstellt
 - 2026-05-04: Firmware K10..K15 + Qt-Wizard umgebaut
 - 2026-05-05: Wizard-Flanken/Impulslogik stabilisiert, End-to-End erfolgreich getestet
+- 2026-05-05: Offener Punkt ergänzt: QT soll lokalen Prog-Tastendruck sichtbar melden
