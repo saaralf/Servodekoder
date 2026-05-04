@@ -133,15 +133,20 @@ public:
 
         auto *r2 = new QHBoxLayout;
         progServoIdx = new QSpinBox; progServoIdx->setRange(1,16);
-        progParamId = new QComboBox; progParamId->addItems({"1 zeroPhys","2 relMin (v+90)","3 relMax (v+90)","4 divLeft"});
-        progParamVal = new QSpinBox; progParamVal->setRange(0,255);
-        progCommitBtn = new QPushButton("Commit (K6=1)");
-        progSaveBtn = new QPushButton("Save EEPROM (K7=1)");
-        progDefaultsBtn = new QPushButton("Defaults (K7=2)");
-        r2->addWidget(new QLabel("K3 Servo")); r2->addWidget(progServoIdx);
-        r2->addWidget(new QLabel("K4 Param")); r2->addWidget(progParamId);
-        r2->addWidget(new QLabel("K5 Wert")); r2->addWidget(progParamVal);
-        r2->addWidget(progCommitBtn); r2->addWidget(progSaveBtn); r2->addWidget(progDefaultsBtn);
+        progStep = new QComboBox; progStep->addItems({"1","2","5","10","20"}); progStep->setCurrentText("5");
+        progMoveMinusBtn = new QPushButton("-");
+        progMovePlusBtn = new QPushButton("+");
+        progMidBtn = new QPushButton("Mitte");
+        progStoreLBtn = new QPushButton("L speichern");
+        progStoreRBtn = new QPushButton("R speichern");
+        progStartBtn = new QPushButton("Setup START (K10=1)");
+        progSaveBtn = new QPushButton("Setup SAVE+ENDE (K10=3)");
+        progAbortBtn = new QPushButton("Setup ABBRUCH (K10=2)");
+        r2->addWidget(new QLabel("Servo")); r2->addWidget(progServoIdx);
+        r2->addWidget(new QLabel("Schritt")); r2->addWidget(progStep);
+        r2->addWidget(progMoveMinusBtn); r2->addWidget(progMovePlusBtn); r2->addWidget(progMidBtn);
+        r2->addWidget(progStoreLBtn); r2->addWidget(progStoreRBtn);
+        r2->addWidget(progStartBtn); r2->addWidget(progSaveBtn); r2->addWidget(progAbortBtn);
         progL->addLayout(r2);
 
         servoTable = new QTableWidget(16,6);
@@ -159,21 +164,21 @@ public:
             auto *bMid=new QPushButton("Mitte"); auto *bG=new QPushButton("Gerade"); auto *bA=new QPushButton("Abzweig"); auto *bC=new QPushButton("Commit");
             hl->addWidget(bMid); hl->addWidget(bG); hl->addWidget(bA); hl->addWidget(bC);
             servoTable->setCellWidget(s,5,w);
-            connect(bMid,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,100,s); sendSX(bus,101,2); appendLog(QString("TEST Mitte S%1").arg(s)); });
-            connect(bG,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,100,s); sendSX(bus,101,3); appendLog(QString("TEST Gerade S%1").arg(s)); });
-            connect(bA,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,100,s); sendSX(bus,101,4); appendLog(QString("TEST Abzweig S%1").arg(s)); });
-            connect(bC,&QPushButton::clicked,this,[this,s](){ commitServoRow(s); });
+            connect(bMid,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,13,3); appendLog(QString("SETUP Mitte S%1").arg(s+1)); });
+            connect(bG,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,14,1); appendLog(QString("SETUP L speichern S%1").arg(s+1)); });
+            connect(bA,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,14,2); appendLog(QString("SETUP R speichern S%1").arg(s+1)); });
+            connect(bC,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); appendLog(QString("SETUP Servo selektiert S%1").arg(s+1)); });
         }
         progL->addWidget(servoTable);
 
         auto *r3 = new QHBoxLayout;
-        progCommitAllBtn = new QPushButton("Alle Commit");
+        progCommitAllBtn = new QPushButton("Servo uebernehmen (K11)");
         r3->addWidget(progCommitAllBtn);
         progL->addLayout(r3);
 
-        auto *sx1Hint = new QLabel("SX1-Stil: Änderungen werden sofort wirksam. Programmiermodus mit Track AUS aktiv, Ende per Track EIN oder Prog-Taste.");
+        auto *sx1Hint = new QLabel("Wizard: K10 Start/Save/Abort, K11 Servo, K12 Schritt, K13 Move, K14 L/R speichern");
         progL->addWidget(sx1Hint);
-        progStatusLbl = new QLabel("Status K8: -");
+        progStatusLbl = new QLabel("Status K15: -");
         progL->addWidget(progStatusLbl);
 
         tabs->addTab(progTab, "Servo-Programmer");
@@ -227,18 +232,15 @@ public:
             sendSX(bus, 0, 1); // TrackBit 1
             appendLog(QString("PROG AUS (%1): Track=1").arg(bus?"SX1":"SX0"));
         });
-        connect(progCommitBtn,&QPushButton::clicked,this,[this](){
-            int pid = progParamId->currentIndex()+1;
-            int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
-            sendSX(bus, 3, progServoIdx->value()-1);
-            sendSX(bus, 4, pid);
-            sendSX(bus, 5, progParamVal->value());
-            sendSX(bus, 6, 1);
-            appendLog(QString("PROG COMMIT: S%1 PID%2 VAL%3").arg(progServoIdx->value()).arg(pid).arg(progParamVal->value()));
-        });
-        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,7,1); appendLog("PROG SAVE EEPROM"); });
-        connect(progDefaultsBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,7,2); appendLog("PROG DEFAULTS"); });
-        connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ for(int s=0;s<16;++s) commitServoRow(s); appendLog("PROG ALLE COMMIT"); });
+        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000); appendLog("SETUP START (K10=1 Impuls)"); });
+        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,3); usleep(50000); sendSX(bus,10,0); usleep(10000); appendLog("SETUP SAVE+ENDE (K10=3 Impuls)"); });
+        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,2); usleep(50000); sendSX(bus,10,0); usleep(10000); appendLog("SETUP ABBRUCH (K10=2 Impuls)"); });
+        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,12,progStep->currentText().toInt()); sendSX(bus,13,1); usleep(50000); sendSX(bus,13,0); usleep(10000); appendLog("SETUP MOVE - (Impuls)"); });
+        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,12,progStep->currentText().toInt()); sendSX(bus,13,2); usleep(50000); sendSX(bus,13,0); usleep(10000); appendLog("SETUP MOVE + (Impuls)"); });
+        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,13,3); usleep(50000); sendSX(bus,13,0); usleep(10000); appendLog("SETUP MITTE (Impuls)"); });
+        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,14,1); usleep(50000); sendSX(bus,14,0); usleep(10000); appendLog("SETUP L speichern (Impuls)"); });
+        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,14,2); usleep(50000); sendSX(bus,14,0); usleep(10000); appendLog("SETUP R speichern (Impuls)"); });
+        connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
     }
     ~MainWin(){ doDisconnect(); }
 
@@ -378,10 +380,10 @@ private slots:
             int d = (int)b;
             if(adr<0 || adr>=112) continue;
 
-            if(bus==0 && adr==8){
+            if(adr==15){
                 QString st="idle";
-                if(d==1) st="ok"; else if(d==2) st="range-error"; else if(d==3) st="index-error"; else if(d==4) st="busy";
-                progStatusLbl->setText(QString("Status: %1 (%2)").arg(st).arg(d));
+                if(d==1) st="ok"; else if(d==2) st="error"; else if(d==3) st="busy";
+                progStatusLbl->setText(QString("Status K15 (SX%1): %2 (%3)").arg(bus).arg(st).arg(d));
             }
 
             if(bus==0){
@@ -399,23 +401,6 @@ private slots:
     }
 
 private:
-    void commitServoRow(int s){
-        if(!servoTable) return;
-        bool ok1=false,ok2=false,ok3=false,ok4=false;
-        int zero=servoTable->item(s,1)->text().toInt(&ok1);
-        int rmin=servoTable->item(s,2)->text().toInt(&ok2);
-        int rmax=servoTable->item(s,3)->text().toInt(&ok3);
-        int div=servoTable->item(s,4)->text().toInt(&ok4);
-        if(!(ok1&&ok2&&ok3&&ok4)){ appendLog(QString("S%1: ungültige Werte").arg(s)); return; }
-        zero=qBound(0,zero,180); rmin=qBound(0,rmin,90); rmax=qBound(90,rmax,180); div=div?1:0;
-        sendSX(0,3,s);
-        sendSX(0,4,1); sendSX(0,5,zero); sendSX(0,6,1);
-        sendSX(0,4,2); sendSX(0,5,rmin); sendSX(0,6,1);
-        sendSX(0,4,3); sendSX(0,5,rmax); sendSX(0,6,1);
-        sendSX(0,4,4); sendSX(0,5,div);  sendSX(0,6,1);
-        appendLog(QString("COMMIT ROW S%1 zero=%2 rmin=%3 rmax=%4 div=%5").arg(s).arg(zero).arg(rmin).arg(rmax).arg(div));
-    }
-
     void updateRow(int adr,int bus,int d){
         Q_UNUSED(bus);
         int row = adr % 28;
@@ -445,9 +430,9 @@ private:
     QSpinBox *sendAdr{}, *sendVal{};
     QPushButton *quick0Btn{}, *quick1Btn{}, *quick255Btn{};
     QCheckBox *confirmBox{};
-    QSpinBox *progAddrA{}, *progAddrB{}, *progServoIdx{}, *progParamVal{};
-    QComboBox *progParamId{};
-    QPushButton *progOnBtn{}, *progOffBtn{}, *progCommitBtn{}, *progSaveBtn{}, *progDefaultsBtn{}, *progCommitAllBtn{};
+    QSpinBox *progAddrA{}, *progAddrB{}, *progServoIdx{};
+    QComboBox *progStep{};
+    QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
     QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
