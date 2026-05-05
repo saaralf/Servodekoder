@@ -258,6 +258,15 @@ public:
         visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value()); visualAddrA->setFixedWidth(90);
         visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value()); visualAddrB->setFixedWidth(90);
         visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
+        visualBusBox = new QComboBox; visualBusBox->addItems({"SX0","SX1"});
+
+        auto *busRow = new QHBoxLayout;
+        busRow->setContentsMargins(0,0,0,0);
+        busRow->setSpacing(6);
+        busRow->addWidget(new QLabel("SX Bus:"));
+        busRow->addWidget(visualBusBox);
+        busRow->addStretch(1);
+        visualL->addLayout(busRow);
 
         auto *addrArow = new QHBoxLayout;
         addrArow->setContentsMargins(0,0,0,0);
@@ -376,6 +385,9 @@ public:
         connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); updateVisualTitles(); });
         connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); updateVisualTitles(); });
         connect(visualBitOrder,&QCheckBox::toggled,this,[this](bool){ updateVisualTitles(); });
+        connect(visualBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(sendBusBox->currentIndex()!=i) sendBusBox->setCurrentIndex(i); });
+        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(visualBusBox->currentIndex()!=i) visualBusBox->setCurrentIndex(i); });
+        visualBusBox->setCurrentIndex(sendBusBox->currentIndex());
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
         updateVisualTitles();
 
@@ -615,6 +627,7 @@ private:
     QGroupBox* visualServoBoxes[16]{};
     QSpinBox *visualAddrA{}, *visualAddrB{};
     QCheckBox *visualBitOrder{};
+    QComboBox *visualBusBox{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
