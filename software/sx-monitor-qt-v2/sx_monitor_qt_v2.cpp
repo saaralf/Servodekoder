@@ -447,6 +447,7 @@ private:
         ensureVisualSetupStarted(bus);
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
+        sendSX(bus,15,1); // Setup-Freigabe bei jedem Move stabil halten
         sendSX(bus,11,servo+1);
         sendSX(bus,12,progStep->currentText().toInt());
         sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
@@ -457,6 +458,7 @@ private:
         ensureVisualSetupStarted(bus);
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
+        sendSX(bus,15,1); // Setup-Freigabe bei jedem Store stabil halten
         sendSX(bus,11,servo+1);
         sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
         appendLog(QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus?"SX1":"SX0"));
