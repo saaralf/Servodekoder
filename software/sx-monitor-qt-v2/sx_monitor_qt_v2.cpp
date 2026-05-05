@@ -294,10 +294,15 @@ public:
         auto *addrArow = new QHBoxLayout;
         addrArow->setContentsMargins(0,0,0,0);
         addrArow->setSpacing(6);
+        visualSetupSaveBtn = new QPushButton("Setup Ende (K10=3)");
+        visualSetupAbortBtn = new QPushButton("Setup Abbruch (K10=2)");
         addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):"));
         addrArow->addWidget(visualAddrA);
         addrArow->addSpacing(10);
         addrArow->addWidget(visualBitOrder);
+        addrArow->addSpacing(10);
+        addrArow->addWidget(visualSetupSaveBtn);
+        addrArow->addWidget(visualSetupAbortBtn);
         addrArow->addStretch(1);
         visualL->addLayout(addrArow);
 
@@ -405,6 +410,8 @@ public:
         connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(visualBusBox->currentIndex()!=i) visualBusBox->setCurrentIndex(i); });
         visualBusBox->setCurrentIndex(sendBusBox->currentIndex());
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,3); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; appendLog("V2 SETUP ENDE (K10=3 Impuls)"); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,2); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; appendLog("V2 SETUP ABBRUCH (K10=2 Impuls)"); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -658,6 +665,7 @@ private:
     QSpinBox *visualAddrA{}, *visualAddrB{};
     QCheckBox *visualBitOrder{};
     QComboBox *visualBusBox{};
+    QPushButton *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
