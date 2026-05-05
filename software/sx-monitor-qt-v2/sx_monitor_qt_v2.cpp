@@ -61,18 +61,37 @@ protected:
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing,true);
         p.fillRect(rect(), QColor(245,245,245));
-        QPointF c(width()*0.5, height()*0.68);
-        p.setBrush(QColor(80,80,80));
-        p.setPen(Qt::NoPen);
-        p.drawEllipse(c, 10, 10);
 
+        // Servo body
+        QRectF body(width()*0.28, height()*0.58, width()*0.44, height()*0.30);
+        p.setBrush(QColor(90,90,95));
+        p.setPen(QPen(QColor(40,40,40),1));
+        p.drawRoundedRect(body, 6, 6);
+
+        // Shaft center above body
+        QPointF c(width()*0.5, height()*0.56);
+        p.setBrush(QColor(60,60,60));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(c, 9, 9);
+
+        // Long double-sided horn (both directions)
         double rad = qDegreesToRadians((double)-angle);
-        double len = qMin(width(), height()) * 0.32;
-        QPointF e(c.x() + len*qCos(rad), c.y() - len*qSin(rad));
-        p.setPen(QPen(QColor(220,40,40), 4));
-        p.drawLine(c,e);
+        double halfLen = qMin(width(), height()) * 0.34;
+        QPointF p1(c.x() - halfLen*qCos(rad), c.y() + halfLen*qSin(rad));
+        QPointF p2(c.x() + halfLen*qCos(rad), c.y() - halfLen*qSin(rad));
+
+        p.setPen(QPen(QColor(220,40,40), 6, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(p1, p2);
+
+        // small holes on horn tips (visual realism)
+        p.setBrush(QColor(235,235,235));
+        p.setPen(QPen(QColor(120,120,120),1));
+        p.drawEllipse(p1, 3, 3);
+        p.drawEllipse(p2, 3, 3);
+
+        // angle text
         p.setPen(QPen(QColor(30,30,30),1));
-        p.drawText(QRect(0,0,width(),18), Qt::AlignCenter, QString("%1°").arg(angle));
+        p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
     }
 private:
     int angle = 0;
