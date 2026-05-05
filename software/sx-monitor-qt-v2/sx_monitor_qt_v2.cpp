@@ -104,7 +104,7 @@ protected:
             p.translate(c);
             p.rotate((double)-angle - 90.0);
             p.translate(-c);
-            p.drawPixmap(armTarget.translated(-dx, -dy), arm);
+            p.drawPixmap(armTarget.translated(-dx + manualTrimX, -dy + manualTrimY), arm);
             p.restore();
         }
 
@@ -116,6 +116,8 @@ private:
     QPixmap body, arm;
     double armCenterOffsetX = 0.0;
     double armCenterOffsetY = 0.0;
+    int manualTrimX = -1; // final visual alignment
+    int manualTrimY = -6;
 };
 
 class MainWin : public QMainWindow {
