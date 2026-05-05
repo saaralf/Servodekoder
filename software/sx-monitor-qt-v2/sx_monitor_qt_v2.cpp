@@ -19,6 +19,8 @@
 #include <QMessageBox>
 #include <QDialog>
 #include <QDialogButtonBox>
+#include <QPainter>
+#include <QtMath>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -49,6 +51,32 @@ static QString bits8(int v, bool bit1Left){
     }
     return s;
 }
+
+class ServoArmWidget : public QWidget {
+public:
+    explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) { setMinimumSize(120,80); }
+    void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing,true);
+        p.fillRect(rect(), QColor(245,245,245));
+        QPointF c(width()*0.5, height()*0.68);
+        p.setBrush(QColor(80,80,80));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(c, 10, 10);
+
+        double rad = qDegreesToRadians((double)-angle);
+        double len = qMin(width(), height()) * 0.32;
+        QPointF e(c.x() + len*qCos(rad), c.y() - len*qSin(rad));
+        p.setPen(QPen(QColor(220,40,40), 4));
+        p.drawLine(c,e);
+        p.setPen(QPen(QColor(30,30,30),1));
+        p.drawText(QRect(0,0,width(),18), Qt::AlignCenter, QString("%1°").arg(angle));
+    }
+private:
+    int angle = 0;
+};
 
 class MainWin : public QMainWindow {
     Q_OBJECT
@@ -205,9 +233,8 @@ public:
             servoArmPos[s] = 0;
             auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
             auto *bl = new QVBoxLayout(box);
-            auto *arm = new QLabel("Arm: ----|----  (0)");
-            arm->setStyleSheet("font-family: monospace;");
-            servoArmLabels[s] = arm;
+            auto *arm = new ServoArmWidget();
+            servoArmWidgets[s] = arm;
             bl->addWidget(arm);
 
             auto *row1 = new QHBoxLayout;
@@ -475,13 +502,10 @@ private:
 
     void appendLog(const QString& s){ logView->append(s); }
     void updateServoArmLabel(int s){
-        if(s<0 || s>=16 || !servoArmLabels[s]) return;
+        if(s<0 || s>=16 || !servoArmWidgets[s]) return;
         if(servoArmPos[s] < -90) servoArmPos[s] = -90;
         if(servoArmPos[s] > 90) servoArmPos[s] = 90;
-        int idx = (servoArmPos[s] + 90) / 20;
-        QString bar = "----------";
-        if(idx>=0 && idx<bar.size()) bar[idx] = '|';
-        servoArmLabels[s]->setText(QString("Arm: %1  (%2)").arg(bar).arg(servoArmPos[s]));
+        servoArmWidgets[s]->setAngleDeg(servoArmPos[s]);
     }
 
     QComboBox *ifaceBox{}, *busBox{};
@@ -496,7 +520,7 @@ private:
     QComboBox *progStep{};
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
     QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{};
-    QLabel* servoArmLabels[16]{};
+    ServoArmWidget* servoArmWidgets[16]{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
