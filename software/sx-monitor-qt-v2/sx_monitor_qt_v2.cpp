@@ -255,15 +255,17 @@ public:
 
         auto *visualTab = new QWidget;
         auto *visualL = new QVBoxLayout(visualTab);
-        auto *visualTop = new QHBoxLayout;
-        visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value());
-        visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value());
+        auto *visualTop = new QVBoxLayout;
+        auto *visualRow1 = new QHBoxLayout;
+        auto *visualRow2 = new QHBoxLayout;
+        visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value()); visualAddrA->setFixedWidth(90);
+        visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value()); visualAddrB->setFixedWidth(90);
         visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
         auto *visualHint = new QLabel("Servo-Bildansicht: obere Reihe=AddrA, untere Reihe=AddrB");
-        visualTop->addWidget(new QLabel("AddrA:")); visualTop->addWidget(visualAddrA);
-        visualTop->addWidget(new QLabel("AddrB:")); visualTop->addWidget(visualAddrB);
-        visualTop->addWidget(visualBitOrder);
-        visualTop->addWidget(visualHint, 1);
+        visualRow1->addWidget(new QLabel("Adresse obere Reihe (AddrA):")); visualRow1->addWidget(visualAddrA); visualRow1->addStretch(1);
+        visualRow2->addWidget(new QLabel("Adresse untere Reihe (AddrB):")); visualRow2->addWidget(visualAddrB); visualRow2->addSpacing(12); visualRow2->addWidget(visualBitOrder); visualRow2->addWidget(visualHint,1);
+        visualTop->addLayout(visualRow1);
+        visualTop->addLayout(visualRow2);
         visualL->addLayout(visualTop);
 
         auto pulseMove = [this](int servo, int move){
