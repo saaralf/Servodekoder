@@ -62,20 +62,20 @@ protected:
         p.setRenderHint(QPainter::Antialiasing,true);
         p.fillRect(rect(), QColor(245,245,245));
 
-        // KY66-like blue servo body
-        QRectF body(width()*0.24, height()*0.56, width()*0.52, height()*0.32);
+        // KY66-like blue servo body (upright / vertical)
+        QRectF body(width()*0.36, height()*0.34, width()*0.28, height()*0.50);
         p.setBrush(QColor(45, 105, 185));
         p.setPen(QPen(QColor(20,50,95),1));
         p.drawRoundedRect(body, 6, 6);
 
         // top cap
-        QRectF cap(width()*0.34, height()*0.49, width()*0.32, height()*0.08);
+        QRectF cap(width()*0.34, height()*0.26, width()*0.32, height()*0.09);
         p.setBrush(QColor(235,235,235));
         p.setPen(QPen(QColor(170,170,170),1));
         p.drawRoundedRect(cap, 3, 3);
 
         // Shaft center above body
-        QPointF c(width()*0.5, height()*0.53);
+        QPointF c(width()*0.5, height()*0.30);
         p.setBrush(QColor(70,70,70));
         p.setPen(Qt::NoPen);
         p.drawEllipse(c, 6, 6);
