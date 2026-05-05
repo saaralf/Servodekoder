@@ -116,8 +116,8 @@ private:
     QPixmap body, arm;
     double armCenterOffsetX = 0.0;
     double armCenterOffsetY = 0.0;
-    int manualTrimX = 3;  // nach rechts
-    int manualTrimY = -12; // höher
+    int manualTrimX = 1;   // Feinkorrektur: etwas nach links
+    int manualTrimY = -13; // Feinkorrektur: leicht höher
 };
 
 class MainWin : public QMainWindow {
