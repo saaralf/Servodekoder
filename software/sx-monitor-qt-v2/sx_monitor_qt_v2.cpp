@@ -88,12 +88,12 @@ protected:
 
         int side = qMin(width(), height()) - 8;
         QRect target((width()-side)/2, (height()-side)/2, side, side);
+        QRect armTarget = target.adjusted(-int(side*0.10), -int(side*0.10), int(side*0.10), int(side*0.10)); // darf über Kachelrand ragen
 
         if(!body.isNull()) p.drawPixmap(target, body);
 
         // Arm mit pixelgenauem Offset um die Nabe drehen
         if(!arm.isNull()){
-            QRect armTarget = target;
             double sx = (double)armTarget.width() / (double)arm.width();
             double sy = (double)armTarget.height() / (double)arm.height();
             int dx = qRound(armCenterOffsetX * sx);
@@ -116,8 +116,8 @@ private:
     QPixmap body, arm;
     double armCenterOffsetX = 0.0;
     double armCenterOffsetY = 0.0;
-    int manualTrimX = -1; // final visual alignment
-    int manualTrimY = -6;
+    int manualTrimX = 3;  // nach rechts
+    int manualTrimY = -12; // höher
 };
 
 class MainWin : public QMainWindow {
