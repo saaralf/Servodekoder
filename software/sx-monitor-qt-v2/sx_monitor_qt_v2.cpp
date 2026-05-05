@@ -72,8 +72,8 @@ protected:
         QRect target((width()-side)/2, (height()-side)/2, side, side);
 
         // Always draw a clear upright servo body (so it never disappears)
-        QRectF bodyR(target.left()+target.width()*0.36, target.top()+target.height()*0.34,
-                     target.width()*0.28, target.height()*0.50);
+        QRectF bodyR(target.left()+target.width()*0.34, target.top()+target.height()*0.33,
+                     target.width()*0.32, target.height()*0.52);
         p.setBrush(QColor(45, 105, 185));
         p.setPen(QPen(QColor(20,50,95),1));
         p.drawRoundedRect(bodyR, 6, 6);
@@ -83,24 +83,28 @@ protected:
         p.setPen(QPen(QColor(170,170,170),1));
         p.drawRoundedRect(capR, 3, 3);
 
-        QPoint c(target.center().x(), target.top()+int(target.height()*0.30));
-        p.setBrush(QColor(70,70,70));
+        QPoint c(target.center().x(), target.top()+int(target.height()*0.29));
+        p.setBrush(QColor(55,55,55));
         p.setPen(Qt::NoPen);
-        p.drawEllipse(c, 6, 6);
+        p.drawEllipse(c, 8, 8);
+        p.setBrush(QColor(185,185,185));
+        p.drawEllipse(c, 3, 3);
 
         // Draw a very visible double-sided horn (always), plus optional texture overlay
         double rad = qDegreesToRadians((double)-angle);
-        double halfLen = qMin(width(), height()) * 0.28;
+        double halfLen = qMin(width(), height()) * 0.34;
         QPointF p1(c.x() - halfLen*qCos(rad), c.y() + halfLen*qSin(rad));
         QPointF p2(c.x() + halfLen*qCos(rad), c.y() - halfLen*qSin(rad));
 
-        p.setPen(QPen(QColor(250,250,250), 8, Qt::SolidLine, Qt::RoundCap));
+        p.setPen(QPen(QColor(120,120,120), 10, Qt::SolidLine, Qt::RoundCap));
         p.drawLine(p1,p2);
-        p.setPen(QPen(QColor(120,120,120), 1));
-        for(int i=-3;i<=3;i++){
-            QPointF h(c.x() + i*(halfLen/4.0)*qCos(rad), c.y() - i*(halfLen/4.0)*qSin(rad));
-            p.setBrush(QColor(235,235,235));
-            p.drawEllipse(h, 2.0, 2.0);
+        p.setPen(QPen(QColor(252,252,252), 8, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(p1,p2);
+        p.setPen(QPen(QColor(90,90,90), 1));
+        for(int i=-4;i<=4;i++){
+            QPointF h(c.x() + i*(halfLen/5.0)*qCos(rad), c.y() - i*(halfLen/5.0)*qSin(rad));
+            p.setBrush(QColor(240,240,240));
+            p.drawEllipse(h, 2.2, 2.2);
         }
 
         if(!arm.isNull()){
