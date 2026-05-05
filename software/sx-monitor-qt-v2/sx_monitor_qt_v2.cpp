@@ -444,8 +444,7 @@ public:
 private:
     bool ensureVisualSetupStarted(int bus){
         if(!visualSetupArmed){
-            appendLog("V2 BLOCKIERT: Erst 'Progmodus anfordern' klicken und lokale Arduino-Taste drücken (D13 AN).");
-            return false;
+            appendLog("V2 HINWEIS: Progmodus nicht angefordert. Bitte Taste drücken (D13 AN). Sende trotzdem ohne K10-Start.");
         }
         if(visualSetupStarted) return true;
         sendSX(bus,1,visualAddrA->value());
