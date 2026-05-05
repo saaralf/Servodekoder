@@ -23,6 +23,7 @@
 #include <QtMath>
 #include <QPixmap>
 #include <QImage>
+#include <QTabWidget>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -255,8 +256,14 @@ public:
         auto *visualTab = new QWidget;
         auto *visualL = new QVBoxLayout(visualTab);
         auto *visualTop = new QHBoxLayout;
-        auto *visualHint = new QLabel("V2: 16 Servos (2x8). Pro Kachel: -, +, Mitte, Links speichern, Rechts speichern");
-        visualTop->addWidget(visualHint);
+        visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value());
+        visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value());
+        visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
+        auto *visualHint = new QLabel("Servo-Bildansicht: obere Reihe=AddrA, untere Reihe=AddrB");
+        visualTop->addWidget(new QLabel("AddrA:")); visualTop->addWidget(visualAddrA);
+        visualTop->addWidget(new QLabel("AddrB:")); visualTop->addWidget(visualAddrB);
+        visualTop->addWidget(visualBitOrder);
+        visualTop->addWidget(visualHint, 1);
         visualL->addLayout(visualTop);
 
         auto pulseMove = [this](int servo, int move){
@@ -273,6 +280,7 @@ public:
         for(int s=0; s<16; ++s){
             servoArmPos[s] = 0;
             auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
+            visualServoBoxes[s] = box;
             auto *bl = new QVBoxLayout(box);
             auto *arm = new ServoArmWidget();
             servoArmWidgets[s] = arm;
@@ -340,6 +348,11 @@ public:
         connect(quick1Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(1); sendValue(); });
         connect(quick255Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(255); sendValue(); });
         connect(table,&QTableWidget::cellDoubleClicked,this,&MainWin::openSwitchPanel);
+        connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); updateVisualTitles(); });
+        connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); updateVisualTitles(); });
+        connect(visualBitOrder,&QCheckBox::toggled,this,[this](bool){ updateVisualTitles(); });
+        connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
+        updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
             int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
@@ -548,6 +561,18 @@ private:
         if(servoArmPos[s] > 90) servoArmPos[s] = 90;
         servoArmWidgets[s]->setAngleDeg(servoArmPos[s]);
     }
+    void updateVisualTitles(){
+        int a = visualAddrA ? visualAddrA->value() : 1;
+        int b = visualAddrB ? visualAddrB->value() : 0;
+        bool bit1Left = visualBitOrder ? visualBitOrder->isChecked() : true;
+        for(int s=0; s<16; ++s){
+            if(!visualServoBoxes[s]) continue;
+            int bit = (s % 8) + 1;
+            int shown = bit1Left ? bit : (9-bit);
+            int adr = (s < 8) ? a : b;
+            visualServoBoxes[s]->setTitle(QString("S%1  A%2 B%3").arg(s+1).arg(adr).arg(shown));
+        }
+    }
 
     QComboBox *ifaceBox{}, *busBox{};
     QCheckBox *bitOrderBox{};
@@ -562,6 +587,9 @@ private:
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
     QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{};
     ServoArmWidget* servoArmWidgets[16]{};
+    QGroupBox* visualServoBoxes[16]{};
+    QSpinBox *visualAddrA{}, *visualAddrB{};
+    QCheckBox *visualBitOrder{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
