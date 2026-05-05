@@ -68,23 +68,44 @@ protected:
         p.setRenderHint(QPainter::Antialiasing,true);
         p.fillRect(rect(), palette().color(QPalette::Window));
 
-        if(body.isNull() || arm.isNull()){
-            p.setPen(Qt::red);
-            p.drawText(rect(), Qt::AlignCenter, "assets/servo_*.png fehlt");
-            return;
-        }
-
         int side = qMin(width(), height()) - 8;
         QRect target((width()-side)/2, (height()-side)/2, side, side);
-        p.drawPixmap(target, body);
 
-        p.save();
-        QPoint c = target.center();
-        p.translate(c);
-        p.rotate((double)-angle);
-        p.translate(-c);
-        p.drawPixmap(target, arm);
-        p.restore();
+        // Always draw a clear upright servo body (so it never disappears)
+        QRectF bodyR(target.left()+target.width()*0.36, target.top()+target.height()*0.34,
+                     target.width()*0.28, target.height()*0.50);
+        p.setBrush(QColor(45, 105, 185));
+        p.setPen(QPen(QColor(20,50,95),1));
+        p.drawRoundedRect(bodyR, 6, 6);
+        QRectF capR(target.left()+target.width()*0.34, target.top()+target.height()*0.26,
+                    target.width()*0.32, target.height()*0.09);
+        p.setBrush(QColor(235,235,235));
+        p.setPen(QPen(QColor(170,170,170),1));
+        p.drawRoundedRect(capR, 3, 3);
+
+        QPoint c(target.center().x(), target.top()+int(target.height()*0.30));
+        p.setBrush(QColor(70,70,70));
+        p.setPen(Qt::NoPen);
+        p.drawEllipse(c, 6, 6);
+
+        // Rotating arm overlay from asset; fallback to painted line if asset invalid
+        if(!arm.isNull()){
+            QRect armTarget(target.left()+target.width()*0.08, target.top()+target.height()*0.08,
+                            target.width()*0.84, target.height()*0.84);
+            p.save();
+            p.translate(c);
+            p.rotate((double)-angle);
+            p.translate(-c);
+            p.drawPixmap(armTarget, arm);
+            p.restore();
+        } else {
+            double rad = qDegreesToRadians((double)-angle);
+            double halfLen = qMin(width(), height()) * 0.28;
+            QPointF p1(c.x() - halfLen*qCos(rad), c.y() + halfLen*qSin(rad));
+            QPointF p2(c.x() + halfLen*qCos(rad), c.y() - halfLen*qSin(rad));
+            p.setPen(QPen(QColor(245,245,245), 6, Qt::SolidLine, Qt::RoundCap));
+            p.drawLine(p1,p2);
+        }
 
         p.setPen(QPen(QColor(30,30,30),1));
         p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
