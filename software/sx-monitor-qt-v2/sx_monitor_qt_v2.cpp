@@ -447,7 +447,6 @@ private slots:
         doDisconnect();
         // Benutzerwert in baudEdit unverändert verwenden (kein erzwungenes 57600)
 
-        portEdit->setText(autodetectSelectrixPort());
         fd = open(portEdit->text().toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
         if(fd<0){ statusLbl->setText("open failed"); return; }
         int baud = baudEdit->text().toInt();
