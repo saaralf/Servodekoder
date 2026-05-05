@@ -22,6 +22,7 @@
 #include <QPainter>
 #include <QtMath>
 #include <QPixmap>
+#include <QImage>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -60,6 +61,23 @@ public:
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
         body = QPixmap(base + "servo_body_blue.png");
         arm = QPixmap(base + "servo_arm_new.png");
+        if(!arm.isNull()){
+            QImage ai = arm.toImage().convertToFormat(QImage::Format_RGBA8888);
+            qint64 sx=0, sy=0, n=0;
+            for(int y=0;y<ai.height();++y){
+                const uchar* row = ai.constScanLine(y);
+                for(int x=0;x<ai.width();++x){
+                    int a = row[x*4+3];
+                    if(a>20){ sx += x; sy += y; ++n; }
+                }
+            }
+            if(n>0){
+                double cx = (double)sx / (double)n;
+                double cy = (double)sy / (double)n;
+                armCenterOffsetX = cx - (ai.width()-1)/2.0;
+                armCenterOffsetY = cy - (ai.height()-1)/2.0;
+            }
+        }
     }
     void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
 protected:
@@ -71,14 +89,23 @@ protected:
         int side = qMin(width(), height()) - 8;
         QRect target((width()-side)/2, (height()-side)/2, side, side);
 
-        // Schritt 1: User-Bild als Servo-Körper verwenden (ohne Arm)
-        if(!body.isNull()){
-            p.drawPixmap(target, body);
-        } else {
-            p.setBrush(QColor(45,105,185));
-            p.setPen(QPen(QColor(20,50,95),1));
-            p.drawRoundedRect(target.adjusted(target.width()*0.33, target.height()*0.30,
-                                              -target.width()*0.33, -target.height()*0.16),6,6);
+        if(!body.isNull()) p.drawPixmap(target, body);
+
+        // Arm mit pixelgenauem Offset um die Nabe drehen
+        if(!arm.isNull()){
+            QRect armTarget = target;
+            double sx = (double)armTarget.width() / (double)arm.width();
+            double sy = (double)armTarget.height() / (double)arm.height();
+            int dx = qRound(armCenterOffsetX * sx);
+            int dy = qRound(armCenterOffsetY * sy);
+
+            QPoint c = target.center();
+            p.save();
+            p.translate(c);
+            p.rotate((double)-angle);
+            p.translate(-c);
+            p.drawPixmap(armTarget.translated(-dx, -dy), arm);
+            p.restore();
         }
 
         p.setPen(QPen(QColor(30,30,30),1));
@@ -87,6 +114,8 @@ protected:
 private:
     int angle = 0;
     QPixmap body, arm;
+    double armCenterOffsetX = 0.0;
+    double armCenterOffsetY = 0.0;
 };
 
 class MainWin : public QMainWindow {
