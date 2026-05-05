@@ -255,18 +255,13 @@ public:
 
         auto *visualTab = new QWidget;
         auto *visualL = new QVBoxLayout(visualTab);
-        auto *visualTop = new QVBoxLayout;
-        auto *visualRow1 = new QHBoxLayout;
-        auto *visualRow2 = new QHBoxLayout;
         visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value()); visualAddrA->setFixedWidth(90);
         visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value()); visualAddrB->setFixedWidth(90);
         visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
-        auto *visualHint = new QLabel("Servo-Bildansicht: obere Reihe=AddrA, untere Reihe=AddrB");
-        visualRow1->addWidget(new QLabel("Adresse obere Reihe (AddrA):")); visualRow1->addWidget(visualAddrA); visualRow1->addStretch(1);
-        visualRow2->addWidget(new QLabel("Adresse untere Reihe (AddrB):")); visualRow2->addWidget(visualAddrB); visualRow2->addSpacing(12); visualRow2->addWidget(visualBitOrder); visualRow2->addWidget(visualHint,1);
-        visualTop->addLayout(visualRow1);
-        visualTop->addLayout(visualRow2);
-        visualL->addLayout(visualTop);
+
+        auto *addrArow = new QHBoxLayout;
+        addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):")); addrArow->addWidget(visualAddrA); addrArow->addStretch(1);
+        visualL->addLayout(addrArow);
 
         auto pulseMove = [this](int servo, int move){
             int bus=(sendBusBox->currentText()=="SX1")?1:0;
@@ -288,7 +283,12 @@ public:
             return l;
         };
         for(int c=0;c<8;++c) grid->addWidget(mkHdr(c), 0, c);
-        for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 2, c);
+        auto *addrBline = new QWidget;
+        auto *addrBL = new QHBoxLayout(addrBline);
+        addrBL->setContentsMargins(0,0,0,0);
+        addrBL->addWidget(new QLabel("Adresse 2 (untere Reihe):")); addrBL->addWidget(visualAddrB); addrBL->addSpacing(12); addrBL->addWidget(visualBitOrder); addrBL->addStretch(1);
+        grid->addWidget(addrBline, 2, 0, 1, 8);
+        for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 3, c);
 
         for(int s=0; s<16; ++s){
             servoArmPos[s] = 0;
@@ -319,7 +319,7 @@ public:
             connect(bR,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,2); appendLog(QString("V2 S%1 Rechts speichern").arg(s+1)); });
 
             int c = s%8;
-            int r = (s<8) ? 1 : 3;
+            int r = (s<8) ? 1 : 4;
             grid->addWidget(box, r, c);
         }
         visualL->addLayout(grid);
