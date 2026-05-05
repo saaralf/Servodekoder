@@ -102,7 +102,7 @@ protected:
             QPoint c = target.center();
             p.save();
             p.translate(c);
-            p.rotate((double)-angle);
+            p.rotate((double)-angle - 90.0);
             p.translate(-c);
             p.drawPixmap(armTarget.translated(-dx, -dy), arm);
             p.restore();
