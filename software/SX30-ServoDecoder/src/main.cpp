@@ -575,9 +575,9 @@ void loop() {
   processSetupSxWizard();
 
   if (setupMode) {
-    if (!setupBySxWizard) {
-      processSetupSerial();
-    }
+    // Serial-Befehle immer erlauben (auch wenn Setup per SX-Wizard gestartet wurde),
+    // damit 'x'/'w'/+/- lokal zuverlässig funktionieren.
+    processSetupSerial();
     return;
   }
 
