@@ -116,7 +116,7 @@ private:
     QPixmap body, arm;
     double armCenterOffsetX = 0.0;
     double armCenterOffsetY = 0.0;
-    int manualTrimX = 2;   // Feinkorrektur: 1px nach rechts
+    int manualTrimX = 3;   // finaler Feinschliff: +1px nach rechts
     int manualTrimY = -13; // vertikal passt
 };
 
