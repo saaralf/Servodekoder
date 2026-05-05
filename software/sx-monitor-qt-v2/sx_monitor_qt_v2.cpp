@@ -88,7 +88,21 @@ protected:
         p.setPen(Qt::NoPen);
         p.drawEllipse(c, 6, 6);
 
-        // Rotating arm overlay from asset; fallback to painted line if asset invalid
+        // Draw a very visible double-sided horn (always), plus optional texture overlay
+        double rad = qDegreesToRadians((double)-angle);
+        double halfLen = qMin(width(), height()) * 0.28;
+        QPointF p1(c.x() - halfLen*qCos(rad), c.y() + halfLen*qSin(rad));
+        QPointF p2(c.x() + halfLen*qCos(rad), c.y() - halfLen*qSin(rad));
+
+        p.setPen(QPen(QColor(250,250,250), 8, Qt::SolidLine, Qt::RoundCap));
+        p.drawLine(p1,p2);
+        p.setPen(QPen(QColor(120,120,120), 1));
+        for(int i=-3;i<=3;i++){
+            QPointF h(c.x() + i*(halfLen/4.0)*qCos(rad), c.y() - i*(halfLen/4.0)*qSin(rad));
+            p.setBrush(QColor(235,235,235));
+            p.drawEllipse(h, 2.0, 2.0);
+        }
+
         if(!arm.isNull()){
             QRect armTarget(target.left()+target.width()*0.08, target.top()+target.height()*0.08,
                             target.width()*0.84, target.height()*0.84);
@@ -96,15 +110,10 @@ protected:
             p.translate(c);
             p.rotate((double)-angle);
             p.translate(-c);
+            p.setOpacity(0.35);
             p.drawPixmap(armTarget, arm);
+            p.setOpacity(1.0);
             p.restore();
-        } else {
-            double rad = qDegreesToRadians((double)-angle);
-            double halfLen = qMin(width(), height()) * 0.28;
-            QPointF p1(c.x() - halfLen*qCos(rad), c.y() + halfLen*qSin(rad));
-            QPointF p2(c.x() + halfLen*qCos(rad), c.y() - halfLen*qSin(rad));
-            p.setPen(QPen(QColor(245,245,245), 6, Qt::SolidLine, Qt::RoundCap));
-            p.drawLine(p1,p2);
         }
 
         p.setPen(QPen(QColor(30,30,30),1));
