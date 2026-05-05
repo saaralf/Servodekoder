@@ -156,7 +156,9 @@ public:
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
         busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
         portEdit = new QLineEdit(autodetectSelectrixPort());
-        baudEdit = new QLineEdit("115200");
+        baudBox = new QComboBox;
+        baudBox->addItems({"9600","19200","38400","57600","115200"});
+        baudBox->setCurrentText("57600");
         bitOrderBox = new QCheckBox("Bit 1 links / Bit 8 rechts (SX-Optik)");
         bitOrderBox->setChecked(true);
         connectBtn = new QPushButton("Connect");
@@ -165,7 +167,7 @@ public:
         cfgL->addWidget(new QLabel("Interface:")); cfgL->addWidget(ifaceBox);
         cfgL->addWidget(new QLabel("Busse:")); cfgL->addWidget(busBox);
         cfgL->addWidget(new QLabel("Port:")); cfgL->addWidget(portEdit);
-        cfgL->addWidget(new QLabel("Baud:")); cfgL->addWidget(baudEdit);
+        cfgL->addWidget(new QLabel("Baud:")); cfgL->addWidget(baudBox);
         cfgL->addWidget(bitOrderBox);
         cfgL->addWidget(connectBtn); cfgL->addWidget(disconnectBtn);
         cfgL->addWidget(statusLbl);
@@ -451,15 +453,14 @@ private:
 private slots:
     void doConnect(){
         doDisconnect();
-        // Benutzerwert in baudEdit unverändert verwenden (kein erzwungenes 57600)
-
         fd = open(portEdit->text().toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
         if(fd<0){ statusLbl->setText("open failed"); return; }
-        int baud = baudEdit->text().toInt();
+        int baud = baudBox->currentText().toInt();
         if(!set_serial(fd, baud)){ statusLbl->setText("serial cfg failed"); ::close(fd); fd=-1; return; }
 
-        wr2(fd, 0xFE, 0xA0); usleep(20000);   // Monitor+Feedback
-        wr2(fd, 0xFE, 0xB0); usleep(10000);   // Start mit Bus 0 selektiert
+        bool okA0 = wr2(fd, 0xFE, 0xA0); usleep(20000);   // Monitor+Feedback
+        bool okB0 = wr2(fd, 0xFE, 0xB0); usleep(10000);   // Start mit Bus 0 selektiert
+        if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
         rtbsBus1 = false;
         pending=-1;
         timer->start(25);
@@ -628,7 +629,8 @@ private:
 
     QComboBox *ifaceBox{}, *busBox{};
     QCheckBox *bitOrderBox{};
-    QLineEdit *portEdit{}, *baudEdit{};
+    QLineEdit *portEdit{};
+    QComboBox *baudBox{};
     QPushButton *connectBtn{}, *disconnectBtn{}, *sendBtn{};
     QComboBox *sendBusBox{}, *bitButtonsBox{};
     QSpinBox *sendAdr{}, *sendVal{};
