@@ -299,21 +299,8 @@ public:
         addrArow->addStretch(1);
         visualL->addLayout(addrArow);
 
-        auto pulseMove = [this](int servo, int move){
-            int bus=(sendBusBox->currentText()=="SX1")?1:0;
-            // ensure wizard context from visual tab is active
-            sendSX(bus,1,visualAddrA->value());
-            sendSX(bus,2,visualAddrB->value());
-            // K10 NICHT bei jedem Klick triggern (sonst: Mitte anfahren/Jitter)
-            sendSX(bus,11,servo); sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
-        };
-        auto pulseStore = [this](int servo, int store){
-            int bus=(sendBusBox->currentText()=="SX1")?1:0;
-            sendSX(bus,1,visualAddrA->value());
-            sendSX(bus,2,visualAddrB->value());
-            // K10 NICHT bei jedem Klick triggern (sonst: Mitte anfahren/Jitter)
-            sendSX(bus,11,servo); sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
-        };
+        auto pulseMove = [this](int servo, int move){ sendVisualWizardMove(servo, move); };
+        auto pulseStore = [this](int servo, int store){ sendVisualWizardStore(servo, store); };
 
         auto *grid = new QGridLayout;
         grid->setHorizontalSpacing(4);
@@ -441,6 +428,25 @@ public:
         connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
     }
     ~MainWin(){ doDisconnect(); }
+
+private:
+    void sendVisualWizardMove(int servo, int move){
+        int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
+        sendSX(bus,1,visualAddrA->value());
+        sendSX(bus,2,visualAddrB->value());
+        sendSX(bus,11,servo);
+        sendSX(bus,12,progStep->currentText().toInt());
+        sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
+        appendLog(QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus?"SX1":"SX0"));
+    }
+    void sendVisualWizardStore(int servo, int store){
+        int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
+        sendSX(bus,1,visualAddrA->value());
+        sendSX(bus,2,visualAddrB->value());
+        sendSX(bus,11,servo);
+        sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
+        appendLog(QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus?"SX1":"SX0"));
+    }
 
 private slots:
     void doConnect(){
