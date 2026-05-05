@@ -135,7 +135,7 @@ public:
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
         busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
         portEdit = new QLineEdit("/dev/ttyUSB0");
-        baudEdit = new QLineEdit("57600");
+        baudEdit = new QLineEdit("115200");
         bitOrderBox = new QCheckBox("Bit 1 links / Bit 8 rechts (SX-Optik)");
         bitOrderBox->setChecked(true);
         connectBtn = new QPushButton("Connect");
@@ -424,7 +424,7 @@ public:
 private slots:
     void doConnect(){
         doDisconnect();
-        if(ifaceBox->currentText() == "SLX852") baudEdit->setText("57600");
+        // Benutzerwert in baudEdit unverändert verwenden (kein erzwungenes 57600)
 
         fd = open(portEdit->text().toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
         if(fd<0){ statusLbl->setText("open failed"); return; }
