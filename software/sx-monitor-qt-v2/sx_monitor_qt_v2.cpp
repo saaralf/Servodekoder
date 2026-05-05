@@ -570,7 +570,7 @@ private:
             int bit = (s % 8) + 1;
             int shown = bit1Left ? bit : (9-bit);
             int adr = (s < 8) ? a : b;
-            visualServoBoxes[s]->setTitle(QString("S%1  A%2 B%3").arg(s+1).arg(adr).arg(shown));
+            visualServoBoxes[s]->setTitle(QString("S%1 | Adr %2 | Bit %3").arg(s+1).arg(adr).arg(shown));
         }
     }
 
