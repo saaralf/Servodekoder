@@ -398,10 +398,10 @@ public:
         connect(quick1Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(1); sendValue(); });
         connect(quick255Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(255); sendValue(); });
         connect(table,&QTableWidget::cellDoubleClicked,this,&MainWin::openSwitchPanel);
-        connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); updateVisualTitles(); });
-        connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); updateVisualTitles(); });
+        connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); visualSetupStarted=false; updateVisualTitles(); });
+        connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); visualSetupStarted=false; updateVisualTitles(); });
         connect(visualBitOrder,&QCheckBox::toggled,this,[this](bool){ updateVisualTitles(); });
-        connect(visualBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(sendBusBox->currentIndex()!=i) sendBusBox->setCurrentIndex(i); });
+        connect(visualBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ visualSetupStarted=false; if(sendBusBox->currentIndex()!=i) sendBusBox->setCurrentIndex(i); });
         connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(visualBusBox->currentIndex()!=i) visualBusBox->setCurrentIndex(i); });
         visualBusBox->setCurrentIndex(sendBusBox->currentIndex());
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
@@ -432,8 +432,17 @@ public:
     ~MainWin(){ doDisconnect(); }
 
 private:
+    void ensureVisualSetupStarted(int bus){
+        if(visualSetupStarted) return;
+        sendSX(bus,1,visualAddrA->value());
+        sendSX(bus,2,visualAddrB->value());
+        sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000);
+        visualSetupStarted = true;
+        appendLog(QString("V2 SETUP START bus=%1 Adr1=%2 Adr2=%3").arg(bus?"SX1":"SX0").arg(visualAddrA->value()).arg(visualAddrB->value()));
+    }
     void sendVisualWizardMove(int servo, int move){
         int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
+        ensureVisualSetupStarted(bus);
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
         sendSX(bus,11,servo);
@@ -443,6 +452,7 @@ private:
     }
     void sendVisualWizardStore(int servo, int store){
         int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
+        ensureVisualSetupStarted(bus);
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
         sendSX(bus,11,servo);
@@ -462,6 +472,7 @@ private slots:
         bool okB0 = wr2(fd, 0xFE, 0xB0); usleep(10000);   // Start mit Bus 0 selektiert
         if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
         rtbsBus1 = false;
+        visualSetupStarted = false;
         pending=-1;
         timer->start(25);
         statusLbl->setText("online");
@@ -653,6 +664,7 @@ private:
 
     int fd=-1, pending=-1;
     bool rtbsBus1=false;
+    bool visualSetupStarted=false;
     int sx0[112], sx1[112];
 };
 
