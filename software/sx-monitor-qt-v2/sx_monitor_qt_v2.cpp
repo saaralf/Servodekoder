@@ -71,10 +71,19 @@ protected:
         int side = qMin(width(), height()) - 8;
         QRect target((width()-side)/2, (height()-side)/2, side, side);
 
-        // Use user-provided body image as primary visual
-        if(!body.isNull()) p.drawPixmap(target, body);
+        // Draw clear servo body (always visible)
+        QRectF bodyR(target.left()+target.width()*0.33, target.top()+target.height()*0.30,
+                     target.width()*0.34, target.height()*0.54);
+        p.setBrush(QColor(45,105,185));
+        p.setPen(QPen(QColor(20,50,95),1));
+        p.drawRoundedRect(bodyR,6,6);
+        QRectF capR(target.left()+target.width()*0.34, target.top()+target.height()*0.22,
+                    target.width()*0.32, target.height()*0.10);
+        p.setBrush(QColor(235,235,235));
+        p.setPen(QPen(QColor(170,170,170),1));
+        p.drawRoundedRect(capR,3,3);
 
-        // Rotation center is image center for provided assets
+        // Rotation center
         QPoint c = target.center();
 
         // Use user-provided arm image as primary visual, rotated around center
@@ -88,9 +97,9 @@ protected:
         }
 
         // Fallback only if assets are missing
-        if(body.isNull() || arm.isNull()){
+        if(arm.isNull()){
             p.setPen(Qt::red);
-            p.drawText(rect(), Qt::AlignCenter, "assets fehlen: servo_body.png / servo_arm.png");
+            p.drawText(rect(), Qt::AlignCenter, "asset fehlt: servo_arm.png");
         }
 
         p.setPen(QPen(QColor(30,30,30),1));
