@@ -74,25 +74,38 @@ protected:
         p.setRenderHint(QPainter::Antialiasing,true);
         p.fillRect(rect(), palette().color(QPalette::Window));
 
-        int side = qMin(width(), height()) - 8;
-        QRect target((width()-side)/2, (height()-side)/2, side, side);
+        // compose in virtual canvas first, then fit to widget -> no clipping
+        QRectF view = rect().adjusted(6, 6, -6, -6);
+        double base = 1000.0;
+        QRectF bodyR(0, 0, base, base);
+        QPointF c(bodyHubX*base, bodyHubY*base);
+        double armSide = base * 1.20;
+        QRectF armR(c.x() - armHubX*armSide, c.y() - armHubY*armSide, armSide, armSide);
 
-        if(!body.isNull()) p.drawPixmap(target, body);
+        // conservative bounds for rotated square arm
+        double halfDiag = (armSide * 0.5) * 1.41421356237;
+        QRectF armBound(c.x()-halfDiag, c.y()-halfDiag, 2*halfDiag, 2*halfDiag);
+        QRectF scene = bodyR.united(armBound);
+
+        double s = qMin(view.width()/scene.width(), view.height()/scene.height());
+        QPointF t(view.center().x() - s*scene.center().x(),
+                  view.center().y() - s*scene.center().y());
+
+        p.save();
+        p.translate(t);
+        p.scale(s, s);
+
+        if(!body.isNull()) p.drawPixmap(bodyR.toRect(), body);
 
         if(!arm.isNull()){
-            QPointF c(target.left() + bodyHubX*target.width(),
-                      target.top()  + bodyHubY*target.height());
-
-            int armSide = int(side * 1.20); // darf über den Rand ragen
-            QRect armRect(int(c.x() - armHubX*armSide), int(c.y() - armHubY*armSide), armSide, armSide);
-
             p.save();
             p.translate(c);
             p.rotate((double)-angle - 90.0);
             p.translate(-c);
-            p.drawPixmap(armRect, arm);
+            p.drawPixmap(armR.toRect(), arm);
             p.restore();
         }
+        p.restore();
 
         p.setPen(QPen(QColor(30,30,30),1));
         p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
