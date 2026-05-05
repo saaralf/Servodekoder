@@ -283,14 +283,14 @@ public:
             // ensure wizard context from visual tab is active
             sendSX(bus,1,visualAddrA->value());
             sendSX(bus,2,visualAddrB->value());
-            sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000);
+            // K10 NICHT bei jedem Klick triggern (sonst: Mitte anfahren/Jitter)
             sendSX(bus,11,servo); sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
         };
         auto pulseStore = [this](int servo, int store){
             int bus=(sendBusBox->currentText()=="SX1")?1:0;
             sendSX(bus,1,visualAddrA->value());
             sendSX(bus,2,visualAddrB->value());
-            sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000);
+            // K10 NICHT bei jedem Klick triggern (sonst: Mitte anfahren/Jitter)
             sendSX(bus,11,servo); sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
         };
 
