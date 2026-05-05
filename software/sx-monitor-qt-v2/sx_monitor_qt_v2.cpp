@@ -58,7 +58,7 @@ static QString bits8(int v, bool bit1Left){
 class ServoArmWidget : public QWidget {
 public:
     explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
-        setMinimumSize(180,180);
+        setMinimumSize(150,150);
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
         body = QPixmap(base + "servo_body_blue.png");
         arm = QPixmap(base + "servo_arm_new.png");
@@ -260,7 +260,13 @@ public:
         visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
 
         auto *addrArow = new QHBoxLayout;
-        addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):")); addrArow->addWidget(visualAddrA); addrArow->addStretch(1);
+        addrArow->setContentsMargins(0,0,0,0);
+        addrArow->setSpacing(6);
+        addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):"));
+        addrArow->addWidget(visualAddrA);
+        addrArow->addSpacing(10);
+        addrArow->addWidget(visualBitOrder);
+        addrArow->addStretch(1);
         visualL->addLayout(addrArow);
 
         auto pulseMove = [this](int servo, int move){
@@ -274,6 +280,8 @@ public:
         };
 
         auto *grid = new QGridLayout;
+        grid->setHorizontalSpacing(4);
+        grid->setVerticalSpacing(4);
         auto mkHdr = [this](int servoIdx)->QLabel*{
             int bit = (servoIdx % 8) + 1;
             int shown = (visualBitOrder && visualBitOrder->isChecked()) ? bit : (9-bit);
@@ -286,7 +294,11 @@ public:
         auto *addrBline = new QWidget;
         auto *addrBL = new QHBoxLayout(addrBline);
         addrBL->setContentsMargins(0,0,0,0);
-        addrBL->addWidget(new QLabel("Adresse 2 (untere Reihe):")); addrBL->addWidget(visualAddrB); addrBL->addSpacing(12); addrBL->addWidget(visualBitOrder); addrBL->addStretch(1);
+        addrBL->setContentsMargins(0,0,0,0);
+        addrBL->setSpacing(6);
+        addrBL->addWidget(new QLabel("Adresse 2 (untere Reihe):"));
+        addrBL->addWidget(visualAddrB);
+        addrBL->addStretch(1);
         grid->addWidget(addrBline, 2, 0, 1, 8);
         for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 3, c);
 
