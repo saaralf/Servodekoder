@@ -66,7 +66,7 @@ protected:
     void paintEvent(QPaintEvent*) override {
         QPainter p(this);
         p.setRenderHint(QPainter::Antialiasing,true);
-        p.fillRect(rect(), QColor(245,245,245));
+        p.fillRect(rect(), palette().color(QPalette::Window));
 
         if(body.isNull() || arm.isNull()){
             p.setPen(Qt::red);
