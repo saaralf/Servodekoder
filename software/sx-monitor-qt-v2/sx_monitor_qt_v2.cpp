@@ -58,7 +58,7 @@ public:
     explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
         setMinimumSize(120,120);
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
-        body = QPixmap(base + "servo_body_raw.png");
+        body = QPixmap(base + "servo_body_cut.png");
         arm = QPixmap(base + "servo_arm.png");
     }
     void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
