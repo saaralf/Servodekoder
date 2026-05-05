@@ -478,13 +478,12 @@ private slots:
     bool sendSX(int bus, int adr, int val){
         if(fd<0) return false;
         bool ok = true;
-        if(bus==0){
-            if(rtbsBus1){ ok = ok && wr2(fd, 0xFE, 0xB0); usleep(4000); rtbsBus1=false; }
-        } else {
-            if(!rtbsBus1){ ok = ok && wr2(fd, 0xFE, 0xB1); usleep(4000); rtbsBus1=true; }
-        }
+        // robust: bus always explicitly selected before each TX
+        ok = ok && wr2(fd, 0xFE, (bus==0)?0xB0:0xB1);
+        usleep(4000);
+        rtbsBus1 = (bus==1);
         uint8_t cmd = (uint8_t)(0x80 | (adr & 0x7F));
-        for(int i=0;i<3;i++){ ok = ok && wr2(fd, cmd, (uint8_t)(val & 0xFF)); usleep(3000); }
+        for(int i=0;i<4;i++){ ok = ok && wr2(fd, cmd, (uint8_t)(val & 0xFF)); usleep(3000); }
         return ok;
     }
 
@@ -498,26 +497,9 @@ private slots:
         int val = sendVal->value() & 0xFF;
         int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
 
-        // srcpd/selectrix.c kompatibel:
-        // selRautenhaus(bus) -> write(SXwrite + addr) -> write(data)
-        // Buswahl über RautenhsCC (FE): B0/B1
-        bool ok = true;
-        if(bus==0){
-            if(rtbsBus1){ ok = ok && wr2(fd, 0xFE, 0xB0); usleep(4000); rtbsBus1=false; }
-        } else {
-            if(!rtbsBus1){ ok = ok && wr2(fd, 0xFE, 0xB1); usleep(4000); rtbsBus1=true; }
-        }
-
-        uint8_t cmd = (uint8_t)(0x80 | adr); // SXwrite + adr
-        for(int i=0;i<4;i++){
-            ok = ok && wr2(fd, cmd, (uint8_t)val);
-            usleep(3000);
-        }
-
-        if(!ok){
-            appendLog("Senden fehlgeschlagen: write error");
-            return;
-        }
+        bool ok = sendSX(bus, adr, val);
+        uint8_t cmd = (uint8_t)(0x80 | adr);
+        if(!ok){ appendLog("Senden fehlgeschlagen: write error"); return; }
 
         appendLog(QString("TX SX%1 ADR %2 cmd=%3 DATA=%4 bits=%5")
                   .arg(bus).arg(adr)
