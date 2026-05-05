@@ -57,7 +57,7 @@ static QString bits8(int v, bool bit1Left){
 class ServoArmWidget : public QWidget {
 public:
     explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
-        setMinimumSize(120,120);
+        setMinimumSize(180,180);
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
         body = QPixmap(base + "servo_body_blue.png");
         arm = QPixmap(base + "servo_arm_new.png");
@@ -263,7 +263,7 @@ public:
             auto *bl = new QVBoxLayout(box);
             auto *arm = new ServoArmWidget();
             servoArmWidgets[s] = arm;
-            bl->addWidget(arm);
+            bl->addWidget(arm, 1);
 
             auto *row1 = new QHBoxLayout;
             auto *bMinus = new QPushButton("-");
