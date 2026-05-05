@@ -58,7 +58,7 @@ public:
     explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
         setMinimumSize(120,120);
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
-        body = QPixmap(base + "servo_body.png");
+        body = QPixmap(base + "servo_body_raw.png");
         arm = QPixmap(base + "servo_arm.png");
     }
     void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
@@ -71,22 +71,15 @@ protected:
         int side = qMin(width(), height()) - 8;
         QRect target((width()-side)/2, (height()-side)/2, side, side);
 
-        // Draw clear servo body (always visible)
-        QRectF bodyR(target.left()+target.width()*0.33, target.top()+target.height()*0.30,
-                     target.width()*0.34, target.height()*0.54);
-        p.setBrush(QColor(45,105,185));
-        p.setPen(QPen(QColor(20,50,95),1));
-        p.drawRoundedRect(bodyR,6,6);
-        QRectF capR(target.left()+target.width()*0.34, target.top()+target.height()*0.22,
-                    target.width()*0.32, target.height()*0.10);
-        p.setBrush(QColor(235,235,235));
-        p.setPen(QPen(QColor(170,170,170),1));
-        p.drawRoundedRect(capR,3,3);
-
-        // Schritt 1: nur Servo senkrecht anzeigen (ohne Arm), damit Basis sicher passt
-        // Rotation center für spätere Schritte:
-        QPoint c = target.center();
-        Q_UNUSED(c);
+        // Schritt 1: User-Bild als Servo-Körper verwenden (ohne Arm)
+        if(!body.isNull()){
+            p.drawPixmap(target, body);
+        } else {
+            p.setBrush(QColor(45,105,185));
+            p.setPen(QPen(QColor(20,50,95),1));
+            p.drawRoundedRect(target.adjusted(target.width()*0.33, target.height()*0.30,
+                                              -target.width()*0.33, -target.height()*0.16),6,6);
+        }
 
         p.setPen(QPen(QColor(30,30,30),1));
         p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
