@@ -59,7 +59,7 @@ public:
         setMinimumSize(120,120);
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
         body = QPixmap(base + "servo_body_blue.png");
-        arm = QPixmap(base + "servo_arm.png");
+        arm = QPixmap(base + "servo_arm_new.png");
     }
     void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
 protected:
