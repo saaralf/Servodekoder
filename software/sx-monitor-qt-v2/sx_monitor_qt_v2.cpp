@@ -436,9 +436,11 @@ private:
         if(visualSetupStarted) return;
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
+        // wie im funktionierenden Programmer: Setup-Freigabe + Startimpuls
+        sendSX(bus,15,1); usleep(50000);
         sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000);
         visualSetupStarted = true;
-        appendLog(QString("V2 SETUP START bus=%1 Adr1=%2 Adr2=%3").arg(bus?"SX1":"SX0").arg(visualAddrA->value()).arg(visualAddrB->value()));
+        appendLog(QString("V2 SETUP START bus=%1 Adr1=%2 Adr2=%3 K15=1").arg(bus?"SX1":"SX0").arg(visualAddrA->value()).arg(visualAddrB->value()));
     }
     void sendVisualWizardMove(int servo, int move){
         int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
