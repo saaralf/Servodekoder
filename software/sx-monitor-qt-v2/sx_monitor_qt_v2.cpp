@@ -21,6 +21,7 @@
 #include <QDialogButtonBox>
 #include <QPainter>
 #include <QtMath>
+#include <QPixmap>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -54,7 +55,12 @@ static QString bits8(int v, bool bit1Left){
 
 class ServoArmWidget : public QWidget {
 public:
-    explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) { setMinimumSize(120,80); }
+    explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
+        setMinimumSize(120,120);
+        QString base = QCoreApplication::applicationDirPath() + "/../assets/";
+        body = QPixmap(base + "servo_body.png");
+        arm = QPixmap(base + "servo_arm.png");
+    }
     void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
 protected:
     void paintEvent(QPaintEvent*) override {
@@ -62,47 +68,30 @@ protected:
         p.setRenderHint(QPainter::Antialiasing,true);
         p.fillRect(rect(), QColor(245,245,245));
 
-        // KY66-like blue servo body (upright / vertical)
-        QRectF body(width()*0.36, height()*0.34, width()*0.28, height()*0.50);
-        p.setBrush(QColor(45, 105, 185));
-        p.setPen(QPen(QColor(20,50,95),1));
-        p.drawRoundedRect(body, 6, 6);
-
-        // top cap
-        QRectF cap(width()*0.34, height()*0.26, width()*0.32, height()*0.09);
-        p.setBrush(QColor(235,235,235));
-        p.setPen(QPen(QColor(170,170,170),1));
-        p.drawRoundedRect(cap, 3, 3);
-
-        // Shaft center above body
-        QPointF c(width()*0.5, height()*0.30);
-        p.setBrush(QColor(70,70,70));
-        p.setPen(Qt::NoPen);
-        p.drawEllipse(c, 6, 6);
-
-        // Long white double-sided horn
-        double rad = qDegreesToRadians((double)-angle);
-        double halfLen = qMin(width(), height()) * 0.36;
-        QPointF p1(c.x() - halfLen*qCos(rad), c.y() + halfLen*qSin(rad));
-        QPointF p2(c.x() + halfLen*qCos(rad), c.y() - halfLen*qSin(rad));
-
-        p.setPen(QPen(QColor(245,245,245), 8, Qt::SolidLine, Qt::RoundCap));
-        p.drawLine(p1, p2);
-
-        // hole pattern along horn (KY66 style)
-        p.setBrush(QColor(225,225,225));
-        p.setPen(QPen(QColor(150,150,150),1));
-        for(int i=-3;i<=3;i++){
-            QPointF h(c.x() + i*(halfLen/4.0)*qCos(rad), c.y() - i*(halfLen/4.0)*qSin(rad));
-            p.drawEllipse(h, 1.8, 1.8);
+        if(body.isNull() || arm.isNull()){
+            p.setPen(Qt::red);
+            p.drawText(rect(), Qt::AlignCenter, "assets/servo_*.png fehlt");
+            return;
         }
 
-        // angle text
+        int side = qMin(width(), height()) - 8;
+        QRect target((width()-side)/2, (height()-side)/2, side, side);
+        p.drawPixmap(target, body);
+
+        p.save();
+        QPoint c = target.center();
+        p.translate(c);
+        p.rotate((double)-angle);
+        p.translate(-c);
+        p.drawPixmap(target, arm);
+        p.restore();
+
         p.setPen(QPen(QColor(30,30,30),1));
         p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
     }
 private:
     int angle = 0;
+    QPixmap body, arm;
 };
 
 class MainWin : public QMainWindow {
