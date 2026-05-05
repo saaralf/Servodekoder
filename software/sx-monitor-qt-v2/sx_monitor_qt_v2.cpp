@@ -294,6 +294,7 @@ public:
         auto *addrArow = new QHBoxLayout;
         addrArow->setContentsMargins(0,0,0,0);
         addrArow->setSpacing(6);
+        visualSetupRequestBtn = new QPushButton("Progmodus anfordern (Taste drücken)");
         visualSetupSaveBtn = new QPushButton("Setup Ende (K10=3)");
         visualSetupAbortBtn = new QPushButton("Setup Abbruch (K10=2)");
         addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):"));
@@ -301,6 +302,7 @@ public:
         addrArow->addSpacing(10);
         addrArow->addWidget(visualBitOrder);
         addrArow->addSpacing(10);
+        addrArow->addWidget(visualSetupRequestBtn);
         addrArow->addWidget(visualSetupSaveBtn);
         addrArow->addWidget(visualSetupAbortBtn);
         addrArow->addStretch(1);
@@ -410,8 +412,9 @@ public:
         connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(visualBusBox->currentIndex()!=i) visualBusBox->setCurrentIndex(i); });
         visualBusBox->setCurrentIndex(sendBusBox->currentIndex());
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,3); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; appendLog("V2 SETUP ENDE (K10=3 Impuls)"); });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,2); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; appendLog("V2 SETUP ABBRUCH (K10=2 Impuls)"); });
+        connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){ visualSetupArmed=true; visualSetupStarted=false; appendLog("V2: Progmodus angefordert. Bitte lokale Arduino-Taste drücken (D13 muss AN sein)."); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,3); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; visualSetupArmed=false; appendLog("V2 SETUP ENDE (K10=3 Impuls)"); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,2); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; visualSetupArmed=false; appendLog("V2 SETUP ABBRUCH (K10=2 Impuls)"); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -439,19 +442,22 @@ public:
     ~MainWin(){ doDisconnect(); }
 
 private:
-    void ensureVisualSetupStarted(int bus){
-        if(visualSetupStarted) return;
+    bool ensureVisualSetupStarted(int bus){
+        if(!visualSetupArmed){
+            appendLog("V2 BLOCKIERT: Erst 'Progmodus anfordern' klicken und lokale Arduino-Taste drücken (D13 AN).");
+            return false;
+        }
+        if(visualSetupStarted) return true;
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
-        // wie im funktionierenden Programmer: Setup-Freigabe + Startimpuls
         sendSX(bus,15,1); usleep(50000);
-        sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000);
         visualSetupStarted = true;
-        appendLog(QString("V2 SETUP START bus=%1 Adr1=%2 Adr2=%3 K15=1").arg(bus?"SX1":"SX0").arg(visualAddrA->value()).arg(visualAddrB->value()));
+        appendLog(QString("V2 SETUP AKTIV bus=%1 Adr1=%2 Adr2=%3 (ohne K10-Start)").arg(bus?"SX1":"SX0").arg(visualAddrA->value()).arg(visualAddrB->value()));
+        return true;
     }
     void sendVisualWizardMove(int servo, int move){
         int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
-        ensureVisualSetupStarted(bus);
+        if(!ensureVisualSetupStarted(bus)) return;
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
         sendSX(bus,11,servo);
@@ -462,7 +468,7 @@ private:
     }
     void sendVisualWizardStore(int servo, int store){
         int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
-        ensureVisualSetupStarted(bus);
+        if(!ensureVisualSetupStarted(bus)) return;
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
         sendSX(bus,11,servo);
@@ -666,7 +672,7 @@ private:
     QSpinBox *visualAddrA{}, *visualAddrB{};
     QCheckBox *visualBitOrder{};
     QComboBox *visualBusBox{};
-    QPushButton *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
+    QPushButton *visualSetupRequestBtn{}, *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
@@ -675,6 +681,7 @@ private:
 
     int fd=-1, pending=-1;
     bool rtbsBus1=false;
+    bool visualSetupArmed=false;
     bool visualSetupStarted=false;
     int sx0[112], sx1[112];
 };
