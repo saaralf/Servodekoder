@@ -61,23 +61,11 @@ public:
         QString base = QCoreApplication::applicationDirPath() + "/../assets/";
         body = QPixmap(base + "servo_body_blue.png");
         arm = QPixmap(base + "servo_arm_new.png");
-        if(!arm.isNull()){
-            QImage ai = arm.toImage().convertToFormat(QImage::Format_RGBA8888);
-            qint64 sx=0, sy=0, n=0;
-            for(int y=0;y<ai.height();++y){
-                const uchar* row = ai.constScanLine(y);
-                for(int x=0;x<ai.width();++x){
-                    int a = row[x*4+3];
-                    if(a>20){ sx += x; sy += y; ++n; }
-                }
-            }
-            if(n>0){
-                double cx = (double)sx / (double)n;
-                double cy = (double)sy / (double)n;
-                armCenterOffsetX = cx - (ai.width()-1)/2.0;
-                armCenterOffsetY = cy - (ai.height()-1)/2.0;
-            }
-        }
+        // normalized pivot points from assets
+        bodyHubX = 624.7 / 1254.0;
+        bodyHubY = 361.0 / 1254.0;
+        armHubX  = 0.5;
+        armHubY  = 0.5;
     }
     void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
 protected:
@@ -88,23 +76,21 @@ protected:
 
         int side = qMin(width(), height()) - 8;
         QRect target((width()-side)/2, (height()-side)/2, side, side);
-        QRect armTarget = target.adjusted(-int(side*0.10), -int(side*0.10), int(side*0.10), int(side*0.10)); // darf über Kachelrand ragen
 
         if(!body.isNull()) p.drawPixmap(target, body);
 
-        // Arm mit pixelgenauem Offset um die Nabe drehen
         if(!arm.isNull()){
-            double sx = (double)armTarget.width() / (double)arm.width();
-            double sy = (double)armTarget.height() / (double)arm.height();
-            int dx = qRound(armCenterOffsetX * sx);
-            int dy = qRound(armCenterOffsetY * sy);
+            QPointF c(target.left() + bodyHubX*target.width(),
+                      target.top()  + bodyHubY*target.height());
 
-            QPoint c = target.center();
+            int armSide = int(side * 1.20); // darf über den Rand ragen
+            QRect armRect(int(c.x() - armHubX*armSide), int(c.y() - armHubY*armSide), armSide, armSide);
+
             p.save();
             p.translate(c);
             p.rotate((double)-angle - 90.0);
             p.translate(-c);
-            p.drawPixmap(armTarget.translated(-dx + manualTrimX, -dy + manualTrimY), arm);
+            p.drawPixmap(armRect, arm);
             p.restore();
         }
 
@@ -114,10 +100,10 @@ protected:
 private:
     int angle = 0;
     QPixmap body, arm;
-    double armCenterOffsetX = 0.0;
-    double armCenterOffsetY = 0.0;
-    int manualTrimX = 8;   // deutlich sichtbarer Rechts-Offset für schnellen Abgleich
-    int manualTrimY = -13; // vertikal passt
+    double bodyHubX = 0.5;
+    double bodyHubY = 0.3;
+    double armHubX = 0.5;
+    double armHubY = 0.5;
 };
 
 class MainWin : public QMainWindow {
