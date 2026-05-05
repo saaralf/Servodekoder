@@ -279,6 +279,17 @@ public:
         };
 
         auto *grid = new QGridLayout;
+        auto mkHdr = [this](int servoIdx)->QLabel*{
+            int bit = (servoIdx % 8) + 1;
+            int shown = (visualBitOrder && visualBitOrder->isChecked()) ? bit : (9-bit);
+            int adr = (servoIdx < 8) ? visualAddrA->value() : visualAddrB->value();
+            auto *l = new QLabel(QString("Servo %1\nAdresse %2\nBit %3").arg(servoIdx+1).arg(adr).arg(shown));
+            l->setAlignment(Qt::AlignCenter);
+            return l;
+        };
+        for(int c=0;c<8;++c) grid->addWidget(mkHdr(c), 0, c);
+        for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 2, c);
+
         for(int s=0; s<16; ++s){
             servoArmPos[s] = 0;
             auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
@@ -307,8 +318,8 @@ public:
             connect(bL,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,1); appendLog(QString("V2 S%1 Links speichern").arg(s+1)); });
             connect(bR,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,2); appendLog(QString("V2 S%1 Rechts speichern").arg(s+1)); });
 
-            int r = s/8;
             int c = s%8;
+            int r = (s<8) ? 1 : 3;
             grid->addWidget(box, r, c);
         }
         visualL->addLayout(grid);
