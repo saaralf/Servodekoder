@@ -24,6 +24,8 @@
 #include <QPixmap>
 #include <QImage>
 #include <QTabWidget>
+#include <QDir>
+#include <QFileInfo>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -45,6 +47,25 @@ static bool set_serial(int fd, int baud){
     return tcsetattr(fd,TCSANOW,&tty)==0;
 }
 static bool wr2(int fd, uint8_t a, uint8_t d){ uint8_t b[2]={a,d}; return write(fd,b,2)==2; }
+
+static QString autodetectSelectrixPort(){
+    QDir byid("/dev/serial/by-id");
+    if(byid.exists()){
+        auto list = byid.entryInfoList(QDir::System | QDir::Files | QDir::NoDotAndDotDot);
+        QString fallback;
+        for(const QFileInfo &fi : list){
+            const QString n = fi.fileName();
+            const QString full = fi.absoluteFilePath();
+            if(n.contains("FTF8NBF0", Qt::CaseInsensitive)) return full;
+            if(n.contains("USB_Serial_Converter", Qt::CaseInsensitive)) fallback = full;
+        }
+        if(!fallback.isEmpty()) return fallback;
+    }
+    if(QFileInfo::exists("/dev/ttyUSB2")) return "/dev/ttyUSB2";
+    if(QFileInfo::exists("/dev/ttyUSB1")) return "/dev/ttyUSB1";
+    return "/dev/ttyUSB0";
+}
+
 static QString bits8(int v, bool bit1Left){
     QString s;
     if(bit1Left){ // optisch: Bit1..Bit8 von links nach rechts
@@ -134,7 +155,7 @@ public:
         auto *cfgL = new QHBoxLayout(cfg);
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
         busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
-        portEdit = new QLineEdit("/dev/ttyUSB0");
+        portEdit = new QLineEdit(autodetectSelectrixPort());
         baudEdit = new QLineEdit("115200");
         bitOrderBox = new QCheckBox("Bit 1 links / Bit 8 rechts (SX-Optik)");
         bitOrderBox->setChecked(true);
@@ -426,6 +447,7 @@ private slots:
         doDisconnect();
         // Benutzerwert in baudEdit unverändert verwenden (kein erzwungenes 57600)
 
+        portEdit->setText(autodetectSelectrixPort());
         fd = open(portEdit->text().toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
         if(fd<0){ statusLbl->setText("open failed"); return; }
         int baud = baudEdit->text().toInt();
