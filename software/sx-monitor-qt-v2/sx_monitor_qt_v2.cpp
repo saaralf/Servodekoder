@@ -83,24 +83,10 @@ protected:
         p.setPen(QPen(QColor(170,170,170),1));
         p.drawRoundedRect(capR,3,3);
 
-        // Rotation center
+        // Schritt 1: nur Servo senkrecht anzeigen (ohne Arm), damit Basis sicher passt
+        // Rotation center für spätere Schritte:
         QPoint c = target.center();
-
-        // Use user-provided arm image as primary visual, rotated around center
-        if(!arm.isNull()){
-            p.save();
-            p.translate(c);
-            p.rotate((double)-angle);
-            p.translate(-c);
-            p.drawPixmap(target, arm);
-            p.restore();
-        }
-
-        // Fallback only if assets are missing
-        if(arm.isNull()){
-            p.setPen(Qt::red);
-            p.drawText(rect(), Qt::AlignCenter, "asset fehlt: servo_arm.png");
-        }
+        Q_UNUSED(c);
 
         p.setPen(QPen(QColor(30,30,30),1));
         p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
