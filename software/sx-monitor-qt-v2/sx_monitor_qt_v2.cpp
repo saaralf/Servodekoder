@@ -413,8 +413,8 @@ public:
         visualBusBox->setCurrentIndex(sendBusBox->currentIndex());
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
         connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){ visualSetupArmed=true; visualSetupStarted=false; appendLog("V2: Progmodus angefordert. Bitte lokale Arduino-Taste drücken (D13 muss AN sein)."); });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,3); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; visualSetupArmed=false; appendLog("V2 SETUP ENDE (K10=3 Impuls)"); });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,2); usleep(50000); sendSX(bus,10,0); usleep(10000); visualSetupStarted=false; visualSetupArmed=false; appendLog("V2 SETUP ABBRUCH (K10=2 Impuls)"); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -429,35 +429,47 @@ public:
             sendSX(bus, 0, 1); // TrackBit 1
             appendLog(QString("PROG AUS (%1): Track=1").arg(bus?"SX1":"SX0"));
         });
-        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,1); usleep(50000); sendSX(bus,10,0); usleep(10000); appendLog("SETUP START (K10=1 Impuls)"); });
-        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,3); usleep(50000); sendSX(bus,10,0); usleep(10000); appendLog("SETUP SAVE+ENDE (K10=3 Impuls)"); });
-        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,10,2); usleep(50000); sendSX(bus,10,0); usleep(10000); appendLog("SETUP ABBRUCH (K10=2 Impuls)"); });
-        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,12,progStep->currentText().toInt()); sendSX(bus,13,1); usleep(50000); sendSX(bus,13,0); usleep(10000); appendLog("SETUP MOVE - (Impuls)"); });
-        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,12,progStep->currentText().toInt()); sendSX(bus,13,2); usleep(50000); sendSX(bus,13,0); usleep(10000); appendLog("SETUP MOVE + (Impuls)"); });
-        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,13,3); usleep(50000); sendSX(bus,13,0); usleep(10000); appendLog("SETUP MITTE (Impuls)"); });
-        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,14,1); usleep(50000); sendSX(bus,14,0); usleep(10000); appendLog("SETUP L speichern (Impuls)"); });
-        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); sendSX(bus,14,2); usleep(50000); sendSX(bus,14,0); usleep(10000); appendLog("SETUP R speichern (Impuls)"); });
+        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,1,"SETUP START (K10=1 Impuls)"); });
+        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"SETUP SAVE+ENDE (K10=3 Impuls)"); });
+        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"SETUP ABBRUCH (K10=2 Impuls)"); });
+        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 1, "SETUP MOVE - (Impuls)"); });
+        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 2, "SETUP MOVE + (Impuls)"); });
+        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 3, "SETUP MITTE (Impuls)"); });
+        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 1, "SETUP L speichern (Impuls)"); });
+        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 2, "SETUP R speichern (Impuls)"); });
         connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
     }
     ~MainWin(){ doDisconnect(); }
 
 private:
+    void wizardPulseK10(int bus, int val, const QString &msg){
+        sendSX(bus,10,val); usleep(50000); sendSX(bus,10,0); usleep(10000);
+        appendLog(msg);
+    }
+    void wizardMove(int bus, int addrA, int addrB, int servo, int step, int move, const QString &msg){
+        sendSX(bus,1,addrA);
+        sendSX(bus,2,addrB);
+        sendSX(bus,11,servo);
+        sendSX(bus,12,step);
+        sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
+        appendLog(msg);
+    }
+    void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
+        sendSX(bus,1,addrA);
+        sendSX(bus,2,addrB);
+        sendSX(bus,11,servo);
+        sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
+        appendLog(msg);
+    }
     void sendVisualWizardMove(int servo, int move){
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
-        sendSX(bus,1,visualAddrA->value());
-        sendSX(bus,2,visualAddrB->value());
-        sendSX(bus,11,servo);
-        sendSX(bus,12,progStep->currentText().toInt());
-        sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
-        appendLog(QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus?"SX1":"SX0"));
+        wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
+                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus?"SX1":"SX0"));
     }
     void sendVisualWizardStore(int servo, int store){
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
-        sendSX(bus,1,visualAddrA->value());
-        sendSX(bus,2,visualAddrB->value());
-        sendSX(bus,11,servo);
-        sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
-        appendLog(QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus?"SX1":"SX0"));
+        wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
+                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus?"SX1":"SX0"));
     }
 
 private slots:
