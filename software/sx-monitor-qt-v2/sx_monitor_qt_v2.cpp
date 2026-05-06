@@ -481,13 +481,27 @@ private slots:
         bool okA0 = wr2(fd, 0xFE, 0xA0); usleep(20000);   // Monitor+Feedback
         bool okB0 = wr2(fd, 0xFE, 0xB0); usleep(10000);   // Start mit Bus 0 selektiert
         if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
+
+        bool seenData = false;
+        for(int i=0; i<20 && !seenData; ++i){
+            uint8_t b=0;
+            int r = ::read(fd, &b, 1);
+            if(r==1) seenData = true;
+            else usleep(10000);
+        }
+        if(!seenData){
+            appendLog("Connect abgebrochen: kein SX-Datenverkehr erkannt (falscher Port/kein SLX-Interface?)");
+            statusLbl->setText("no SX interface");
+            ::close(fd); fd=-1; return;
+        }
+
         rtbsBus1 = false;
         visualSetupStarted = false;
         pending=-1;
         timer->start(25);
         statusLbl->setText("online");
         connectBtn->setEnabled(false); disconnectBtn->setEnabled(true);
-        appendLog("Connect ok, FE A0 gesendet.");
+        appendLog("Connect ok, SX-Interface erkannt (FE A0/B0 + Datenverkehr).");
     }
 
     void doDisconnect(){
