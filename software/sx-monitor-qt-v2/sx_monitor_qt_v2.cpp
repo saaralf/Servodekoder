@@ -281,13 +281,10 @@ public:
         visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value()); visualAddrA->setFixedWidth(90);
         visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value()); visualAddrB->setFixedWidth(90);
         visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
-        visualBusBox = new QComboBox; visualBusBox->addItems({"SX0","SX1"});
-
         auto *busRow = new QHBoxLayout;
         busRow->setContentsMargins(0,0,0,0);
         busRow->setSpacing(6);
-        busRow->addWidget(new QLabel("SX Bus:"));
-        busRow->addWidget(visualBusBox);
+        busRow->addWidget(new QLabel("SX-Bus: zentral über 'SX Senden'"));
         busRow->addStretch(1);
         visualL->addLayout(busRow);
 
@@ -408,13 +405,11 @@ public:
         connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); visualSetupStarted=false; updateVisualTitles(); });
         connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); visualSetupStarted=false; updateVisualTitles(); });
         connect(visualBitOrder,&QCheckBox::toggled,this,[this](bool){ updateVisualTitles(); });
-        connect(visualBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ visualSetupStarted=false; if(sendBusBox->currentIndex()!=i) sendBusBox->setCurrentIndex(i); });
-        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int i){ if(visualBusBox->currentIndex()!=i) visualBusBox->setCurrentIndex(i); });
-        visualBusBox->setCurrentIndex(sendBusBox->currentIndex());
+        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){ visualSetupStarted=false; });
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
         connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){ visualSetupArmed=true; visualSetupStarted=false; appendLog("V2: Progmodus angefordert. Bitte lokale Arduino-Taste drücken (D13 muss AN sein)."); });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -667,7 +662,6 @@ private:
     QGroupBox* visualServoBoxes[16]{};
     QSpinBox *visualAddrA{}, *visualAddrB{};
     QCheckBox *visualBitOrder{};
-    QComboBox *visualBusBox{};
     QPushButton *visualSetupRequestBtn{}, *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
