@@ -442,32 +442,17 @@ public:
     ~MainWin(){ doDisconnect(); }
 
 private:
-    bool ensureVisualSetupStarted(int bus){
-        if(!visualSetupArmed){
-            appendLog("V2 HINWEIS: Progmodus nicht angefordert. Bitte Taste drücken (D13 AN). Sende trotzdem ohne K10-Start.");
-        }
-        if(visualSetupStarted) return true;
-        sendSX(bus,1,visualAddrA->value());
-        sendSX(bus,2,visualAddrB->value());
-        sendSX(bus,15,1); usleep(50000);
-        visualSetupStarted = true;
-        appendLog(QString("V2 SETUP AKTIV bus=%1 Adr1=%2 Adr2=%3 (ohne K10-Start)").arg(bus?"SX1":"SX0").arg(visualAddrA->value()).arg(visualAddrB->value()));
-        return true;
-    }
     void sendVisualWizardMove(int servo, int move){
-        int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
-        if(!ensureVisualSetupStarted(bus)) return;
+        int bus=(sendBusBox->currentText()=="SX1")?1:0;
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
         sendSX(bus,11,servo);
-        // V2 bewusst fein: pro Klick 1 Schritt (stabile, sichtbare Reaktion je Klick)
-        sendSX(bus,12,1);
-        sendSX(bus,13,move); usleep(70000); sendSX(bus,13,0); usleep(15000);
-        appendLog(QString("V2 MOVE s=%1 cmd=%2 bus=%3 step=1").arg(servo+1).arg(move).arg(bus?"SX1":"SX0"));
+        sendSX(bus,12,progStep->currentText().toInt());
+        sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
+        appendLog(QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus?"SX1":"SX0"));
     }
     void sendVisualWizardStore(int servo, int store){
-        int bus=(visualBusBox && visualBusBox->currentText()=="SX1")?1:0;
-        if(!ensureVisualSetupStarted(bus)) return;
+        int bus=(sendBusBox->currentText()=="SX1")?1:0;
         sendSX(bus,1,visualAddrA->value());
         sendSX(bus,2,visualAddrB->value());
         sendSX(bus,11,servo);
