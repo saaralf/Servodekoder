@@ -443,6 +443,7 @@ private:
     void wizardMove(int bus, int addrA, int addrB, int servo, int step, int move, const QString &msg){
         sendSX(bus,1,addrA);
         sendSX(bus,2,addrB);
+        sendSX(bus,15,1); // Setup-Freigabe aktiv halten
         sendSX(bus,11,servo+1);
         sendSX(bus,12,step);
         sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
@@ -451,6 +452,7 @@ private:
     void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
         sendSX(bus,1,addrA);
         sendSX(bus,2,addrB);
+        sendSX(bus,15,1); // Setup-Freigabe aktiv halten
         sendSX(bus,11,servo+1);
         sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
         appendLog(msg);
