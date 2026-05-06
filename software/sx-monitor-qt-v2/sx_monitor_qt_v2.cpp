@@ -448,6 +448,8 @@ private:
         sendSX(bus,12,step);
         sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
         appendLog(msg);
+        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6")
+                  .arg(bus?"SX1":"SX0").arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
     }
     void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
         sendSX(bus,1,addrA);
