@@ -369,7 +369,7 @@ public:
 
         auto *sendBox = new QGroupBox("SX senden");
         auto *sendL = new QHBoxLayout(sendBox);
-        sendBusBox = new QComboBox; sendBusBox->addItems({"SX0","SX1"});
+        sendBusBox = busBox; // zentrale, einzige Busauswahl oben
         sendAdr = new QSpinBox; sendAdr->setRange(0,111);
         sendVal = new QSpinBox; sendVal->setRange(0,255);
         sendBtn = new QPushButton("Senden");
@@ -380,7 +380,6 @@ public:
         bitButtonsBox = new QComboBox;
         bitButtonsBox->addItems({"Bitbuttons aus","Bitbuttons ein"});
 
-        sendL->addWidget(new QLabel("Bus:")); sendL->addWidget(sendBusBox);
         sendL->addWidget(new QLabel("Adresse:")); sendL->addWidget(sendAdr);
         sendL->addWidget(new QLabel("Wert:")); sendL->addWidget(sendVal);
         sendL->addWidget(quick0Btn); sendL->addWidget(quick1Btn); sendL->addWidget(quick255Btn);
