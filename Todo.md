@@ -9,6 +9,8 @@ Stand: in Arbeit (Servo-Bildansicht V2 + Telemetrie-Sync)
 - [x] SX-Wizard-Protokoll in Firmware ergänzt (K10..K15)
 - [x] SX-Monitor-Qt auf Wizard-Protokoll K10..K15 umgebaut
 - [x] End-to-End Testplan (Serial + SX-Monitor) dokumentiert und praktisch verifiziert
+- [x] SX-Wizard robust gemacht (Session/K15/K1-Guards, Servo-Lock, Store-Plausibilisierung)
+- [x] Qt-ACK/Telemetrie stabilisiert (gedrosselte Move-Verifikation, CFG-Import-Schutz, vollständige CFG-Prüfung)
 - [ ] Optional: Servo-Relax (PWM nach Stellvorgang aus) gegen Haltestrom
 
 ## Implementiert
@@ -40,9 +42,9 @@ GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 
 ## Nächste Schritte
 1. QT-Rückmeldung für lokalen Prog-Tastendruck ergänzen (klarer Statuskanal/ACK: "Prog aktiv/inaktiv").
-2. SX-Wizard Restproblem: sporadische Fremdimpulse auf K10/K13/K14 (raw=85/raw=170) führen zu unerwarteten CMD/Store-Ereignissen; entstören/robust machen.
-3. Optional Servo-Relax als schaltbare Option ergänzen.
-4. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
+2. Optional Servo-Relax als schaltbare Option ergänzen.
+3. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
+4. Feldtest: mehrfache Langläufe mit korrekter SX-Adresse (K1=20) zur finalen Abnahme (keine Fremd-Servo-Zuckungen, stabile ACKs).
 
 ## QA Testablauf (3 Programmierwege + Telemetrie)
 0) Voraussetzungen
