@@ -28,6 +28,7 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QElapsedTimer>
+#include <QProcess>
 #include <algorithm>
 
 #include <fcntl.h>
@@ -35,6 +36,22 @@
 #include <termios.h>
 
 static const char* APP_VERSION = "2026-05-09-main";
+
+static QString detectGitVersion(){
+    QProcess p;
+    p.start("git", {"rev-parse", "--abbrev-ref", "HEAD"});
+    if(!p.waitForFinished(400)) return QString(APP_VERSION);
+    QString branch = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+    if(branch.isEmpty()) return QString(APP_VERSION);
+
+    QProcess p2;
+    p2.start("git", {"rev-parse", "--short", "HEAD"});
+    if(!p2.waitForFinished(400)) return branch;
+    QString sha = QString::fromUtf8(p2.readAllStandardOutput()).trimmed();
+    if(sha.isEmpty()) return branch;
+
+    return QString("%1@%2").arg(branch, sha);
+}
 
 static bool set_serial(int fd, int baud){
     termios tty{};
@@ -168,7 +185,8 @@ class MainWin : public QMainWindow {
     Q_OBJECT
 public:
     MainWin(){
-        setWindowTitle(QString("SX Monitor – SLX852 (SX0/SX1) | %1").arg(APP_VERSION));
+        appVersion = detectGitVersion();
+        setWindowTitle(QString("SX Monitor – SLX852 (SX0/SX1) | %1").arg(appVersion));
         resize(1280, 860);
         uptime.start();
 
@@ -255,7 +273,7 @@ public:
 
         logView = new QTextEdit; logView->setReadOnly(true);
         tabs->addTab(logView, "Änderungsprotokoll");
-        appendLog(QString("SX-Monitor-Qt V2 gestartet | Version: %1").arg(APP_VERSION));
+        appendLog(QString("SX-Monitor-Qt V2 gestartet | Version: %1").arg(appVersion));
 
         auto *progTab = new QWidget;
         auto *progL = new QVBoxLayout(progTab);
@@ -1050,6 +1068,7 @@ private:
     int teleAsciiScore = 0;
     bool rtbsBus1=false;
     QElapsedTimer uptime;
+    QString appVersion = APP_VERSION;
     qint64 rxWarmupUntilMs = 0;
     int cfgSeenCount = 0;
     bool visualSetupArmed=false;
