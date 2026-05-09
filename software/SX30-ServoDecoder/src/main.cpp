@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09i";
+const char FW_VERSION[] = "2026-05-09j";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -105,6 +105,7 @@ unsigned long sxPostEndIgnoreUntilMs = 0;
 unsigned long sxGuardUntilMs = 0;
 uint8_t sxActiveSessionId = 0;
 uint8_t sxCmdZeroStableCount = 0;
+int8_t sxLockedServo = -1;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -637,12 +638,16 @@ void processSetupSxWizard() {
     sxCmdCooldownUntilMs = millis() + 700;
     if (cmd == 1) {
       startInitialSetup(true);
+      sxLockedServo = (int8_t)sx.get(SX_CHAN_SETUP_SERVO);
+      if (sxLockedServo < 0 || sxLockedServo >= SERVO_COUNT) sxLockedServo = setupServo;
+      if ((uint8_t)sxLockedServo != setupServo) setupSelectServo((uint8_t)sxLockedServo);
       sxGuardUntilMs = millis() + 400; // nur kurz danach Move/Store akzeptieren
       setupAck(1);
     } else if (cmd == 2) {
       setupMode = false;
       digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
       sxActiveSessionId = 0;
+      sxLockedServo = -1;
       sxPostEndIgnoreUntilMs = millis() + 1000;
       setupAck(0);
     } else if (cmd == 3) {
@@ -651,6 +656,7 @@ void processSetupSxWizard() {
         setupMode = false;
         digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
         sxActiveSessionId = 0;
+        sxLockedServo = -1;
         sxPostEndIgnoreUntilMs = millis() + 1000;
         setupAck(1);
       } else {
@@ -663,6 +669,7 @@ void processSetupSxWizard() {
 
   uint8_t sxServo = sx.get(SX_CHAN_SETUP_SERVO);
   if (sxServo >= SERVO_COUNT) sxServo = SERVO_COUNT - 1;
+  if (sxLockedServo >= 0) sxServo = (uint8_t)sxLockedServo;
   if (sxServo != sxSetupLastServo) {
     sxSetupLastServo = sxServo;
     if (sxServo != setupServo) {
