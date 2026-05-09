@@ -224,15 +224,17 @@ public:
         teleBaudBox->setCurrentText("115200");
         teleConnectBtn = new QPushButton("Telemetrie Connect");
         teleDisconnectBtn = new QPushButton("Telemetrie Disconnect");
-        teleReqHelloBtn = new QPushButton("t senden");
-        teleReqCfgBtn = new QPushButton("c senden");
+        teleReqHelloBtn = new QPushButton("HELLO (t)");
+        teleReqCfgBtn = new QPushButton("CFG (c)");
+        ackCfgFallbackBox = new QCheckBox("ACK CFG-Fallback (Notbetrieb)");
+        ackCfgFallbackBox->setChecked(false);
         teleDisconnectBtn->setEnabled(false);
         teleStatusLbl = new QLabel("telemetry offline");
         fwStatusLbl = new QLabel("FW: unbekannt");
         tCfgL->addWidget(new QLabel("Port:")); tCfgL->addWidget(telePortEdit);
         tCfgL->addWidget(new QLabel("Baud:")); tCfgL->addWidget(teleBaudBox);
         tCfgL->addWidget(teleConnectBtn); tCfgL->addWidget(teleDisconnectBtn);
-        tCfgL->addWidget(teleReqHelloBtn); tCfgL->addWidget(teleReqCfgBtn);
+        tCfgL->addWidget(teleReqHelloBtn); tCfgL->addWidget(teleReqCfgBtn); tCfgL->addWidget(ackCfgFallbackBox);
         tCfgL->addWidget(teleStatusLbl); tCfgL->addWidget(fwStatusLbl);
         root->addWidget(tCfg);
 
@@ -997,6 +999,16 @@ private slots:
             appendLog(QString("TEL: CFG-Import fertig (%1 Servos)").arg(cfgSeenCount));
             if(cfgSeenCount < 16){
                 appendLog("WARN: CFG-Import unvollstaendig");
+            } else if(ackCfgFallbackBox && ackCfgFallbackBox->isChecked()){
+                for(int s=0; s<16; ++s){
+                    if(ackPendingType[s].isEmpty()) continue;
+                    ackPendingType[s].clear();
+                    ackPendingSinceMs[s] = 0;
+                    ackVisualState[s] = "cfg-fallback";
+                    setServoTileInputEnabled(s, true);
+                    appendLog(QString("V2 ACK cfg-fallback: S%1").arg(s+1));
+                }
+                updateVisualTitles();
             }
             return;
         }
@@ -1091,6 +1103,7 @@ private:
             QString ackTag;
             if(ackVisualState[s] == "pending") ackTag = " | ACK:pending";
             else if(ackVisualState[s] == "ok") ackTag = " | ACK:ok";
+            else if(ackVisualState[s] == "cfg-fallback") ackTag = " | ACK:cfg-fallback";
             else if(ackVisualState[s] == "timeout") ackTag = " | ACK:timeout";
             QString qTag;
             if(moveQueue[s] != 0) qTag = QString(" | Q:%1").arg(moveQueue[s]);
@@ -1105,6 +1118,7 @@ private:
     QLineEdit *telePortEdit{};
     QComboBox *teleBaudBox{};
     QPushButton *teleConnectBtn{}, *teleDisconnectBtn{}, *teleReqHelloBtn{}, *teleReqCfgBtn{};
+    QCheckBox *ackCfgFallbackBox{};
     QPushButton *connectBtn{}, *disconnectBtn{}, *sendBtn{};
     QComboBox *sendBusBox{}, *bitButtonsBox{};
     QSpinBox *sendAdr{}, *sendVal{};
