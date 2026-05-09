@@ -98,6 +98,7 @@ uint8_t sxSetupLastCmd = 0;
 uint8_t sxSetupLastServo = 0;
 uint8_t sxSetupLastMove = 0;
 uint8_t sxSetupLastStore = 0;
+bool sxCmdArmed = true;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -589,9 +590,13 @@ void processSetupSxWizard() {
   uint8_t move = normMove(rawMove);
   uint8_t store = normStore(rawStore);
 
-  if (cmd != sxSetupLastCmd) {
+  // CMD nur als entprellte Impulsflanke akzeptieren: erst cmd=0 armt erneut
+  if (cmd == 0) {
+    sxCmdArmed = true;
+  } else if (sxCmdArmed) {
     Serial.print(F("ACK_SETUP_CMD src=sx raw=")); Serial.print(rawCmd);
     Serial.print(F(" cmd=")); Serial.println(cmd);
+    sxCmdArmed = false;
     sxSetupLastCmd = cmd;
     if (cmd == 1) {
       startInitialSetup(true);

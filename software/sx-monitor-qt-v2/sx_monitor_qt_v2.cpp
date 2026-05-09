@@ -874,7 +874,7 @@ private slots:
             return;
         }
 
-        if(line.startsWith("ACK_SETUP_STATE ") && line.contains("action=mid")){
+        if(line.startsWith("ACK_SETUP_STATE ")){
             QRegularExpression re("servo=(\\d+)");
             auto m = re.match(line);
             if(m.hasMatch()){
@@ -883,9 +883,14 @@ private slots:
                     visualSetupStarted = true;
                     visualSetupArmed = false;
                     if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_STATE)");
-                    servoArmPos[s] = 0;
-                    updateServoArmLabel(s);
-                    setAckOk(s, "move");
+                    if(line.contains("action=mid")){
+                        servoArmPos[s] = 0;
+                        updateServoArmLabel(s);
+                        setAckOk(s, "move");
+                    } else if(line.contains("action=select")){
+                        // Select bestaetigt aktiven Wizard/Servo; offene Move-Wartezustände für diesen Servo freigeben
+                        if(!ackPendingType[s].isEmpty() && ackPendingType[s] == "move") setAckOk(s, "move");
+                    }
                 }
             }
             return;
