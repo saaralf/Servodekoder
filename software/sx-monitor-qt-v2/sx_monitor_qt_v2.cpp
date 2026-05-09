@@ -353,8 +353,8 @@ public:
         busRow->setSpacing(6);
         busRow->addWidget(new QLabel("SX-Bus: zentral über 'SX Senden'"));
         progPathBox = new QComboBox;
-        progPathBox->addItem("SX-Wizard");
-        progPathBox->addItem("Serial-Wizard");
+        progPathBox->addItem("Serial-Wizard (empfohlen)");
+        progPathBox->addItem("SX-Wizard (experimentell)");
         busRow->addWidget(new QLabel("Programmierweg:"));
         busRow->addWidget(progPathBox);
         busRow->addStretch(1);
@@ -590,7 +590,7 @@ private:
         sendSX(bus,15,1); // Setup-Freigabe aktiv halten
         usleep(18000);
     }
-    bool useSerialWizard() const { return progPathBox && progPathBox->currentText()=="Serial-Wizard"; }
+    bool useSerialWizard() const { return progPathBox && progPathBox->currentText().startsWith("Serial-Wizard"); }
     bool sendSerialWizardChar(char c, const QString &tag){
         if(teleFd<0){ appendLog("WARN: Serial-Wizard: Telemetrie-Port nicht verbunden"); return false; }
         char out[2]={c,'\n'}; ::write(teleFd,out,2);
