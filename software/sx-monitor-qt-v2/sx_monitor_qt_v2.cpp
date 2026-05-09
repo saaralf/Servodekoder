@@ -599,7 +599,7 @@ private:
     }
     void wizardPulseK10(int bus, int val, const QString &msg){
         if(useSerialWizard()){
-            if(val==1) sendSerialWizardChar('s', "start");
+            if(val==1){ sxWizardSessionId = 1; sendSerialWizardChar('s', "start"); }
             else if(val==3) sendSerialWizardChar('w', "save-end");
             else if(val==2) sendSerialWizardChar('x', "abort");
             if(val==3 || val==2) sxWizardSessionId=0;
@@ -635,7 +635,7 @@ private:
         wizardPrime(bus, addrA, addrB, servo, 5); sendSX(bus,14,store); usleep(120000); sendSX(bus,14,0); usleep(25000); appendLog(msg);
     }
     void sendVisualWizardMove(int servo, int move){
-        if(sxWizardSessionId==0){
+        if(!useSerialWizard() && sxWizardSessionId==0){
             appendLog("WARN: MOVE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
             return;
         }
@@ -655,7 +655,7 @@ private:
         }
     }
     void sendVisualWizardStore(int servo, int store){
-        if(sxWizardSessionId==0){
+        if(!useSerialWizard() && sxWizardSessionId==0){
             appendLog("WARN: STORE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
             return;
         }
