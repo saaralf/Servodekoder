@@ -26,10 +26,15 @@
 #include <QTabWidget>
 #include <QDir>
 #include <QFileInfo>
+#include <QRegularExpression>
+#include <QElapsedTimer>
+#include <algorithm>
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <termios.h>
+
+static const char* APP_VERSION = "2026-05-09-main";
 
 static bool set_serial(int fd, int baud){
     termios tty{};
@@ -62,6 +67,24 @@ static QString autodetectSelectrixPort(){
         if(!fallback.isEmpty()) return fallback;
     }
     if(QFileInfo::exists("/dev/ttyUSB2")) return "/dev/ttyUSB2";
+    if(QFileInfo::exists("/dev/ttyUSB1")) return "/dev/ttyUSB1";
+    return "/dev/ttyUSB0";
+}
+
+static QString autodetectArduinoPort(){
+    QDir byid("/dev/serial/by-id");
+    if(byid.exists()){
+        auto list = byid.entryInfoList(QDir::System | QDir::Files | QDir::NoDotAndDotDot);
+        QString fallback;
+        for(const QFileInfo &fi : list){
+            const QString n = fi.fileName();
+            const QString full = fi.absoluteFilePath();
+            if(n.contains("A50285BI", Qt::CaseInsensitive)) return full;
+            if(n.contains("FT232R_USB_UART", Qt::CaseInsensitive)) fallback = full;
+        }
+        if(!fallback.isEmpty()) return fallback;
+    }
+    if(QFileInfo::exists("/dev/ttyUSB0")) return "/dev/ttyUSB0";
     if(QFileInfo::exists("/dev/ttyUSB1")) return "/dev/ttyUSB1";
     return "/dev/ttyUSB0";
 }
@@ -145,8 +168,9 @@ class MainWin : public QMainWindow {
     Q_OBJECT
 public:
     MainWin(){
-        setWindowTitle("SX Monitor – SLX852 (SX0/SX1)");
+        setWindowTitle(QString("SX Monitor – SLX852 (SX0/SX1) | %1").arg(APP_VERSION));
         resize(1280, 860);
+        uptime.start();
 
         auto *cw = new QWidget; setCentralWidget(cw);
         auto *root = new QVBoxLayout(cw);
@@ -172,6 +196,26 @@ public:
         cfgL->addWidget(connectBtn); cfgL->addWidget(disconnectBtn);
         cfgL->addWidget(statusLbl);
         root->addWidget(cfg);
+
+        auto *tCfg = new QGroupBox("Arduino Telemetrie");
+        auto *tCfgL = new QHBoxLayout(tCfg);
+        telePortEdit = new QLineEdit(autodetectArduinoPort());
+        teleBaudBox = new QComboBox;
+        teleBaudBox->addItems({"9600","19200","38400","57600","115200"});
+        teleBaudBox->setCurrentText("115200");
+        teleConnectBtn = new QPushButton("Telemetrie Connect");
+        teleDisconnectBtn = new QPushButton("Telemetrie Disconnect");
+        teleReqHelloBtn = new QPushButton("t senden");
+        teleReqCfgBtn = new QPushButton("c senden");
+        teleDisconnectBtn->setEnabled(false);
+        teleStatusLbl = new QLabel("telemetry offline");
+        fwStatusLbl = new QLabel("FW: unbekannt");
+        tCfgL->addWidget(new QLabel("Port:")); tCfgL->addWidget(telePortEdit);
+        tCfgL->addWidget(new QLabel("Baud:")); tCfgL->addWidget(teleBaudBox);
+        tCfgL->addWidget(teleConnectBtn); tCfgL->addWidget(teleDisconnectBtn);
+        tCfgL->addWidget(teleReqHelloBtn); tCfgL->addWidget(teleReqCfgBtn);
+        tCfgL->addWidget(teleStatusLbl); tCfgL->addWidget(fwStatusLbl);
+        root->addWidget(tCfg);
 
         auto *tabs = new QTabWidget;
         table = new QTableWidget(28,12);
@@ -211,6 +255,7 @@ public:
 
         logView = new QTextEdit; logView->setReadOnly(true);
         tabs->addTab(logView, "Änderungsprotokoll");
+        appendLog(QString("SX-Monitor-Qt V2 gestartet | Version: %1").arg(APP_VERSION));
 
         auto *progTab = new QWidget;
         auto *progL = new QVBoxLayout(progTab);
@@ -299,9 +344,11 @@ public:
         addrArow->addSpacing(10);
         addrArow->addWidget(visualBitOrder);
         addrArow->addSpacing(10);
+        visualProgStateLbl = new QLabel("Progstatus: unbekannt (Taste am Arduino drücken)");
         addrArow->addWidget(visualSetupRequestBtn);
         addrArow->addWidget(visualSetupSaveBtn);
         addrArow->addWidget(visualSetupAbortBtn);
+        addrArow->addWidget(visualProgStateLbl);
         addrArow->addStretch(1);
         visualL->addLayout(addrArow);
 
@@ -331,6 +378,19 @@ public:
         grid->addWidget(addrBline, 2, 0, 1, 8);
         for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 3, c);
 
+        auto *limitLine = new QWidget;
+        auto *limitL = new QHBoxLayout(limitLine);
+        limitL->setContentsMargins(0,0,0,0);
+        limitL->setSpacing(6);
+        limitL->addWidget(new QLabel("V2 Limit ±:"));
+        visualLimitSpin = new QSpinBox;
+        visualLimitSpin->setRange(30,45);
+        visualLimitSpin->setValue(40);
+        limitL->addWidget(visualLimitSpin);
+        limitL->addWidget(new QLabel("(nur GUI-Bedienlimit)"));
+        limitL->addStretch(1);
+        grid->addWidget(limitLine, 5, 0, 1, 8);
+
         for(int s=0; s<16; ++s){
             servoArmPos[s] = 0;
             auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
@@ -341,10 +401,14 @@ public:
             bl->addWidget(arm, 1);
 
             auto *row1 = new QHBoxLayout;
+            auto *bMinus2 = new QPushButton("--");
             auto *bMinus = new QPushButton("-");
             auto *bMid = new QPushButton("Mitte");
             auto *bPlus = new QPushButton("+");
-            row1->addWidget(bMinus); row1->addWidget(bMid); row1->addWidget(bPlus);
+            auto *bPlus2 = new QPushButton("++");
+            bMinus2->setFixedWidth(34); bPlus2->setFixedWidth(34);
+            bMinus->setFixedWidth(30);  bPlus->setFixedWidth(30);
+            row1->addWidget(bMinus2); row1->addWidget(bMinus); row1->addWidget(bMid); row1->addWidget(bPlus); row1->addWidget(bPlus2);
             bl->addLayout(row1);
 
             auto *row2 = new QHBoxLayout;
@@ -353,9 +417,36 @@ public:
             row2->addWidget(bL); row2->addWidget(bR);
             bl->addLayout(row2);
 
-            connect(bMinus,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,1); servoArmPos[s]-=5; updateServoArmLabel(s); appendLog(QString("V2 S%1 -").arg(s+1)); });
-            connect(bPlus,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,2); servoArmPos[s]+=5; updateServoArmLabel(s); appendLog(QString("V2 S%1 +").arg(s+1)); });
-            connect(bMid,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,3); servoArmPos[s]=0; updateServoArmLabel(s); appendLog(QString("V2 S%1 Mitte").arg(s+1)); });
+            auto moveBy = [this,s,pulseMove](int delta){
+                int lim = visualLimitSpin ? visualLimitSpin->value() : 40;
+                int oldPos = servoArmPos[s];
+                int targetPos = std::clamp(oldPos + delta, -lim, lim);
+                int steps = std::abs(targetPos - oldPos);
+                if(steps == 0){
+                    appendLog(QString("V2 S%1 an Grenze (±%2)").arg(s+1).arg(lim));
+                    return;
+                }
+                int dir = (targetPos > oldPos) ? 1 : -1;
+                if(moveQueue[s] != 0){
+                    int qdir = (moveQueue[s] > 0) ? 1 : -1;
+                    if(qdir != dir) moveQueue[s] = 0; // Richtungswechsel: alte Queue verwerfen
+                }
+                moveQueue[s] += dir * steps;
+                if(moveQueue[s] > lim) moveQueue[s] = lim;
+                if(moveQueue[s] < -lim) moveQueue[s] = -lim;
+                appendLog(QString("V2 S%1 queue=%2 (delta=%3, target=%4)").arg(s+1).arg(moveQueue[s]).arg(delta).arg(targetPos));
+                if(ackPendingType[s].isEmpty()){
+                    int cmd = (moveQueue[s] > 0) ? 2 : 1;
+                    moveQueue[s] += (moveQueue[s] > 0) ? -1 : +1;
+                    pulseMove(s, cmd);
+                }
+                updateVisualTitles();
+            };
+            connect(bMinus2,&QPushButton::clicked,this,[moveBy](){ moveBy(-10); });
+            connect(bMinus,&QPushButton::clicked,this,[moveBy](){ moveBy(-1); });
+            connect(bPlus,&QPushButton::clicked,this,[moveBy](){ moveBy(+1); });
+            connect(bPlus2,&QPushButton::clicked,this,[moveBy](){ moveBy(+10); });
+            connect(bMid,&QPushButton::clicked,this,[this,s,pulseMove](){ pulseMove(s,3); appendLog(QString("V2 S%1 Mitte (warte ACK)").arg(s+1)); });
             connect(bL,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,1); appendLog(QString("V2 S%1 Links speichern").arg(s+1)); });
             connect(bR,&QPushButton::clicked,this,[this,s,pulseStore](){ pulseStore(s,2); appendLog(QString("V2 S%1 Rechts speichern").arg(s+1)); });
 
@@ -396,19 +487,30 @@ public:
         connect(timer,&QTimer::timeout,this,&MainWin::pollSerial);
         connect(connectBtn,&QPushButton::clicked,this,&MainWin::doConnect);
         connect(disconnectBtn,&QPushButton::clicked,this,&MainWin::doDisconnect);
+        connect(teleConnectBtn,&QPushButton::clicked,this,&MainWin::doTeleConnect);
+        connect(teleDisconnectBtn,&QPushButton::clicked,this,&MainWin::doTeleDisconnect);
+        connect(teleReqHelloBtn,&QPushButton::clicked,this,[this](){ if(teleFd>=0){ ::write(teleFd,"t\n",2); appendLog("TEL TX: t"); } });
+        connect(teleReqCfgBtn,&QPushButton::clicked,this,[this](){ if(teleFd>=0){ ::write(teleFd,"c\n",2); appendLog("TEL TX: c"); } });
         connect(sendBtn,&QPushButton::clicked,this,&MainWin::sendValue);
         connect(quick0Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(0); sendValue(); });
         connect(quick1Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(1); sendValue(); });
         connect(quick255Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(255); sendValue(); });
         connect(table,&QTableWidget::cellDoubleClicked,this,&MainWin::openSwitchPanel);
-        connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); visualSetupStarted=false; updateVisualTitles(); });
-        connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); visualSetupStarted=false; updateVisualTitles(); });
+        connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateVisualTitles(); });
+        connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateVisualTitles(); });
         connect(visualBitOrder,&QCheckBox::toggled,this,[this](bool){ updateVisualTitles(); });
-        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){ visualSetupStarted=false; });
+        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){ visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateVisualTitles(); });
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
-        connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){ visualSetupArmed=true; visualSetupStarted=false; appendLog("V2: Progmodus angefordert. Bitte lokale Arduino-Taste drücken (D13 muss AN sein)."); });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; });
+        connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){
+            visualSetupArmed=true;
+            visualSetupStarted=false;
+            int bus=(sendBusBox->currentText()=="SX1")?1:0;
+            wizardPulseK10(bus,1,"V2 SETUP START (K10=1 Impuls)");
+            if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: angefordert (K10=1 gesendet), warte auf ACK_SETUP_*");
+            appendLog("V2: Setup angefordert. Lokal Taste ist optional, primär startet K10=1 den Wizard.");
+        });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -462,12 +564,14 @@ private:
     void sendVisualWizardMove(int servo, int move){
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
-                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus?"SX1":"SX0"));
+                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
+        setAckPending(servo, "move", 1);
     }
     void sendVisualWizardStore(int servo, int store){
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
-                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus?"SX1":"SX0"));
+                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
+        setAckPending(servo, "store");
     }
 
 private slots:
@@ -498,28 +602,67 @@ private slots:
         rtbsBus1 = false;
         visualSetupStarted = false;
         pending=-1;
+        sendBusBox->setCurrentText("SX1");
+        rxWarmupUntilMs = uptime.elapsed() + 1200; // Initialrauschen nach Connect unterdruecken
         timer->start(25);
         statusLbl->setText("online");
         connectBtn->setEnabled(false); disconnectBtn->setEnabled(true);
-        appendLog("Connect ok, SX-Interface erkannt (FE A0/B0 + Datenverkehr).");
+        connectBtn->setStyleSheet("QPushButton { background:#1f7a1f; color:white; font-weight:600; }");
+        appendLog("Connect ok, SX-Interface erkannt (FE A0/B0 + Datenverkehr). Bus für V2 auf SX1 gesetzt.");
     }
 
     void doDisconnect(){
         timer->stop();
         if(fd>=0){ ::close(fd); fd=-1; }
         connectBtn->setEnabled(true); disconnectBtn->setEnabled(false);
+        connectBtn->setStyleSheet("");
         statusLbl->setText("offline");
+    }
+
+    void doTeleConnect(){
+        doTeleDisconnect();
+        teleFd = open(telePortEdit->text().toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
+        if(teleFd<0){ teleStatusLbl->setText("tele open failed"); return; }
+        int baud = teleBaudBox->currentText().toInt();
+        if(!set_serial(teleFd, baud)){ teleStatusLbl->setText("tele serial cfg failed"); ::close(teleFd); teleFd=-1; return; }
+        teleBinaryScore = 0;
+        teleAsciiScore = 0;
+        teleStatusLbl->setText("telemetry online");
+        teleConnectBtn->setEnabled(false); teleDisconnectBtn->setEnabled(true);
+        appendLog("Telemetrie-Port verbunden.");
+    }
+
+    void doTeleDisconnect(){
+        if(teleFd>=0){ ::close(teleFd); teleFd=-1; }
+        teleConnectBtn->setEnabled(true); teleDisconnectBtn->setEnabled(false);
+        teleStatusLbl->setText("telemetry offline");
+        teleLineBuf.clear();
     }
 
     bool sendSX(int bus, int adr, int val){
         if(fd<0) return false;
+        const int targetBus = (bus==1) ? 1 : 0;
         bool ok = true;
-        // robust: bus always explicitly selected before each TX
-        ok = ok && wr2(fd, 0xFE, (bus==0)?0xB0:0xB1);
+
+        // Immer genau EINEN expliziten Bus senden (kein SX0/SX1-Mitsenden)
+        ok = ok && wr2(fd, 0xFE, (targetBus==0)?0xB0:0xB1);
         usleep(4000);
-        rtbsBus1 = (bus==1);
+        rtbsBus1 = (targetBus==1);
+
         uint8_t cmd = (uint8_t)(0x80 | (adr & 0x7F));
-        for(int i=0;i<4;i++){ ok = ok && wr2(fd, cmd, (uint8_t)(val & 0xFF)); usleep(3000); }
+        uint8_t data = (uint8_t)(val & 0xFF);
+
+        // Mehrfach senden fuer robuste Uebernahme am Interface
+        for(int i=0;i<4;i++){
+            ok = ok && wr2(fd, cmd, data);
+            usleep(3000);
+        }
+
+        appendLog(QString("TX SX%1 ADR %2 cmd=%3 DATA=%4")
+                  .arg(targetBus)
+                  .arg(adr & 0x7F)
+                  .arg(QString("0x%1").arg(cmd,2,16,QChar('0')).toUpper())
+                  .arg((int)data));
         return ok;
     }
 
@@ -587,6 +730,8 @@ private slots:
     }
 
     void pollSerial(){
+        pollTelemetry();
+        checkAckTimeouts();
         if(fd<0) return;
         uint8_t buf[512];
         int n = ::read(fd, buf, sizeof(buf));
@@ -594,13 +739,20 @@ private slots:
 
         for(int i=0;i<n;i++){
             uint8_t b=buf[i];
-            if(pending<0){ pending=b; continue; }
+            if(pending<0){
+                // Nur gueltige SX-Adressbytes als Frame-Start akzeptieren
+                // (ASCII/Binaermuell soll nicht als SX-Frame fehlinterpretiert werden)
+                if((b & 0x80)==0) continue;
+                pending=b;
+                continue;
+            }
             uint8_t adr_raw = (uint8_t)pending;
             pending=-1;
             int adr = adr_raw & 0x7F;
             int bus = (adr_raw & 0x80) ? 1 : 0;
             int d = (int)b;
             if(adr<0 || adr>=112) continue;
+            if(uptime.elapsed() < rxWarmupUntilMs) continue; // Connect-Start-Rauschen ignorieren
 
             if(adr==15){
                 QString st="idle";
@@ -619,6 +771,137 @@ private slots:
                 if(busBox->currentText()=="SX1" || busBox->currentText()=="SX0+SX1") updateRow(adr,1,d);
                 logChange(adr,1,old,d);
             }
+        }
+    }
+
+    void pollTelemetry(){
+        if(teleFd<0) return;
+        char buf[512];
+        int n = ::read(teleFd, buf, sizeof(buf));
+        if(n<=0) return;
+        for(int i=0;i<n;++i){
+            unsigned char uc = (unsigned char)buf[i];
+            bool isAscii = (uc==9 || uc==10 || uc==13 || (uc>=32 && uc<=126));
+            if(isAscii) teleAsciiScore++; else teleBinaryScore++;
+
+            if(teleBinaryScore > 60 && teleBinaryScore > (teleAsciiScore*2 + 20)){
+                appendLog("WARN: Telemetrie-Port liefert überwiegend Binärdaten. Vermutlich falscher Port (SLX statt Arduino). Trenne Telemetrie.");
+                doTeleDisconnect();
+                return;
+            }
+
+            char c = (char)uc;
+            if(c=='\r') continue;
+            if(c=='\n'){
+                QString line = QString::fromUtf8(teleLineBuf).trimmed();
+                teleLineBuf.clear();
+                if(!line.isEmpty()) parseTelemetryLine(line);
+            } else if(isAscii) {
+                teleLineBuf.append(c);
+                if(teleLineBuf.size()>4096) teleLineBuf.clear();
+            }
+        }
+    }
+
+    void parseTelemetryLine(const QString &line){
+        if(line=="RX:" || line.startsWith("RX:\uFFFD") || line.startsWith("RX:?")) return;
+        appendLog(QString("TEL: %1").arg(line));
+
+        if(line.startsWith("HELLO ")){
+            QRegularExpression re("decoder=([^\\s]+)\\s+fw=([^\\s]+)\\s+proto=(\\d+)");
+            auto m = re.match(line);
+            if(m.hasMatch()){
+                QString decoder = m.captured(1);
+                QString fw = m.captured(2);
+                int proto = m.captured(3).toInt();
+                bool ok = (decoder=="servodecoder" && proto>=1);
+                fwStatusLbl->setText(QString("FW: %1 (%2 p%3)").arg(ok?"OK":"UPDATE NÖTIG").arg(fw).arg(proto));
+            }
+            return;
+        }
+
+        if(line.startsWith("ACK_SETUP_MOVE ")){
+            QRegularExpression re("servo=(\\d+)\\s+rel=(-?\\d+)");
+            auto m = re.match(line);
+            if(m.hasMatch()){
+                int s = m.captured(1).toInt()-1;
+                int rel = m.captured(2).toInt();
+                if(s>=0 && s<16){
+                    visualSetupStarted = true;
+                    visualSetupArmed = false;
+                    if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_MOVE)");
+                    servoArmPos[s] = rel;
+                    updateServoArmLabel(s);
+                    setAckOk(s, "move");
+                }
+            }
+            return;
+        }
+
+        if(line.startsWith("ACK_SETUP_STATE ") && line.contains("action=mid")){
+            QRegularExpression re("servo=(\\d+)");
+            auto m = re.match(line);
+            if(m.hasMatch()){
+                int s = m.captured(1).toInt()-1;
+                if(s>=0 && s<16){
+                    visualSetupStarted = true;
+                    visualSetupArmed = false;
+                    if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_STATE)");
+                    servoArmPos[s] = 0;
+                    updateServoArmLabel(s);
+                    setAckOk(s, "move");
+                }
+            }
+            return;
+        }
+
+        if(line.startsWith("ACK_SETUP_STORE ")){
+            QRegularExpression re("servo=(\\d+)");
+            auto m = re.match(line);
+            if(m.hasMatch()){
+                int s = m.captured(1).toInt()-1;
+                if(s>=0 && s<16) setAckOk(s, "store");
+                visualSetupStarted = true;
+                visualSetupArmed = false;
+                if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_STORE)");
+            }
+            return;
+        }
+
+        if(line.startsWith("CFG_HDR ")){
+            cfgSeenCount = 0;
+            appendLog("TEL: CFG-Import gestartet");
+            return;
+        }
+
+        if(line.startsWith("CFG_S ")){
+            QRegularExpression re("servo=(\\d+)\\s+zero=(\\d+)\\s+relMin=(-?\\d+)\\s+relMax=(-?\\d+)\\s+divLeft=(\\d+)");
+            auto m = re.match(line);
+            if(m.hasMatch()){
+                int s = m.captured(1).toInt()-1;
+                int zero = m.captured(2).toInt();
+                int relMin = m.captured(3).toInt();
+                int relMax = m.captured(4).toInt();
+                int divLeft = m.captured(5).toInt();
+                if(s>=0 && s<16){
+                    int mid = (relMin + relMax) / 2;
+                    servoArmPos[s] = mid;
+                    updateServoArmLabel(s);
+                    if(servoTable){
+                        servoTable->item(s,1)->setText(QString::number(zero));
+                        servoTable->item(s,2)->setText(QString::number(relMin + 90));
+                        servoTable->item(s,3)->setText(QString::number(relMax + 90));
+                        servoTable->item(s,4)->setText(QString::number(divLeft));
+                    }
+                    cfgSeenCount++;
+                }
+            }
+            return;
+        }
+
+        if(line.startsWith("CFG_END")){
+            appendLog(QString("TEL: CFG-Import fertig (%1 Servos)").arg(cfgSeenCount));
+            return;
         }
     }
 
@@ -649,6 +932,49 @@ private:
         if(servoArmPos[s] > 90) servoArmPos[s] = 90;
         servoArmWidgets[s]->setAngleDeg(servoArmPos[s]);
     }
+    void setAckPending(int s, const QString &type, int stepCount=1){
+        if(s<0 || s>=16) return;
+        ackPendingType[s] = type;
+        ackPendingSinceMs[s] = uptime.elapsed();
+        qint64 tmo = ackTimeoutBaseMs;
+        if(type=="move") tmo += (qint64)std::max(0, stepCount-1) * ackTimeoutPerExtraStepMs;
+        ackTimeoutForServoMs[s] = tmo;
+        ackVisualState[s] = "pending";
+        updateVisualTitles();
+    }
+    void setAckOk(int s, const QString &type){
+        if(s<0 || s>=16) return;
+        if(ackPendingType[s] == type){
+            ackPendingType[s].clear();
+            ackPendingSinceMs[s] = 0;
+            ackTimeoutForServoMs[s] = ackTimeoutBaseMs;
+            ackVisualState[s] = "ok";
+            updateVisualTitles();
+            appendLog(QString("V2 ACK ok: S%1 %2").arg(s+1).arg(type));
+            if(type=="move" && moveQueue[s] != 0){
+                int dir = (moveQueue[s] > 0) ? 2 : 1;
+                moveQueue[s] += (moveQueue[s] > 0) ? -1 : +1;
+                sendVisualWizardMove(s, dir);
+                appendLog(QString("V2 Queue: S%1 Rest=%2").arg(s+1).arg(moveQueue[s]));
+            }
+        }
+    }
+    void checkAckTimeouts(){
+        const qint64 now = uptime.elapsed();
+        for(int s=0; s<16; ++s){
+            if(ackPendingType[s].isEmpty()) continue;
+            if((now - ackPendingSinceMs[s]) >= ackTimeoutForServoMs[s]){
+                appendLog(QString("V2 ACK timeout: S%1 %2").arg(s+1).arg(ackPendingType[s]));
+                ackPendingType[s].clear();
+                ackPendingSinceMs[s] = 0;
+                ackVisualState[s] = "timeout";
+                if(visualProgStateLbl && visualSetupArmed && !visualSetupStarted){
+                    visualProgStateLbl->setText("Progstatus: INAKTIV (kein ACK, bitte lokale Taste/D13 prüfen)");
+                }
+                updateVisualTitles();
+            }
+        }
+    }
     void updateVisualTitles(){
         int a = visualAddrA ? visualAddrA->value() : 1;
         int b = visualAddrB ? visualAddrB->value() : 0;
@@ -658,7 +984,13 @@ private:
             int bit = (s % 8) + 1;
             int shown = bit1Left ? bit : (9-bit);
             int adr = (s < 8) ? a : b;
-            visualServoBoxes[s]->setTitle(QString("S%1 | Adr %2 | Bit %3").arg(s+1).arg(adr).arg(shown));
+            QString ackTag;
+            if(ackVisualState[s] == "pending") ackTag = " | ACK:pending";
+            else if(ackVisualState[s] == "ok") ackTag = " | ACK:ok";
+            else if(ackVisualState[s] == "timeout") ackTag = " | ACK:timeout";
+            QString qTag;
+            if(moveQueue[s] != 0) qTag = QString(" | Q:%1").arg(moveQueue[s]);
+            visualServoBoxes[s]->setTitle(QString("S%1 | Adr %2 | Bit %3%4%5").arg(s+1).arg(adr).arg(shown).arg(ackTag).arg(qTag));
         }
     }
 
@@ -666,6 +998,9 @@ private:
     QCheckBox *bitOrderBox{};
     QLineEdit *portEdit{};
     QComboBox *baudBox{};
+    QLineEdit *telePortEdit{};
+    QComboBox *teleBaudBox{};
+    QPushButton *teleConnectBtn{}, *teleDisconnectBtn{}, *teleReqHelloBtn{}, *teleReqCfgBtn{};
     QPushButton *connectBtn{}, *disconnectBtn{}, *sendBtn{};
     QComboBox *sendBusBox{}, *bitButtonsBox{};
     QSpinBox *sendAdr{}, *sendVal{};
@@ -674,12 +1009,13 @@ private:
     QSpinBox *progAddrA{}, *progAddrB{}, *progServoIdx{};
     QComboBox *progStep{};
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
-    QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{};
+    QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{}, *teleStatusLbl{}, *fwStatusLbl{};
     ServoArmWidget* servoArmWidgets[16]{};
     QGroupBox* visualServoBoxes[16]{};
-    QSpinBox *visualAddrA{}, *visualAddrB{};
+    QSpinBox *visualAddrA{}, *visualAddrB{}, *visualLimitSpin{};
     QCheckBox *visualBitOrder{};
     QPushButton *visualSetupRequestBtn{}, *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
+    QLabel *visualProgStateLbl{};
     int servoArmPos[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
@@ -687,9 +1023,23 @@ private:
     QTimer *timer{};
 
     int fd=-1, pending=-1;
+    int teleFd=-1;
+    QByteArray teleLineBuf;
+    int teleBinaryScore = 0;
+    int teleAsciiScore = 0;
     bool rtbsBus1=false;
+    QElapsedTimer uptime;
+    qint64 rxWarmupUntilMs = 0;
+    int cfgSeenCount = 0;
     bool visualSetupArmed=false;
     bool visualSetupStarted=false;
+    QString ackPendingType[16];
+    qint64 ackPendingSinceMs[16]{};
+    qint64 ackTimeoutForServoMs[16]{};
+    QString ackVisualState[16];
+    int moveQueue[16]{};
+    const qint64 ackTimeoutBaseMs = 900;
+    const qint64 ackTimeoutPerExtraStepMs = 120;
     int sx0[112], sx1[112];
 };
 

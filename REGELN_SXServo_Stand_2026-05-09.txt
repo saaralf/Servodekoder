@@ -1,0 +1,101 @@
+SXServo / Servodekoder – Arbeitsregeln (Stand 2026-05-09)
+
+1) Kommunikations- und Arbeitsstil
+- Kommunikation auf Deutsch.
+- Schrittweises Vorgehen, Änderungen transparent und nachvollziehbar.
+- Im aktiven Git-Ordner arbeiten: /opt/programme/selectrix/Servodekoder.
+- Pin-/Kanalnamen exakt wie im Basisplatinen-Schaltplan verwenden.
+
+2) Projektfokus / Referenz
+- Codewort „SXServo“ = laufendes Servodekoder/SX-Monitor-Projekt fortsetzen.
+- Maßgebliche neue Programmer-Oberfläche ist Servo-Bildansicht V2 (Qt).
+- Aufgabenstatus laufend in Todo.md pflegen.
+
+3) Grundprinzip Programmiermodus (Selectrix-Stil)
+- Der Anwender wählt den Bus bewusst (SX0 oder SX1).
+- Im Programmer wird nur auf den gewählten Bus gesendet.
+- Im Programmiermodus ist nur der Decoder relevant, an dem lokal die Prog-Taste betätigt wurde.
+- Andere Adressen/Busse sind in diesem Moment nicht wichtig; der Fokus ist der aktive Decoder.
+- Keine heimliche/automatische Umschaltung auf anderen Bus ohne klare Benutzerentscheidung.
+- Unter /home/michael/Dokumente/Selectrix/Anleitungen sind einige Selectrix Dekoder und Zentrale und Interface Dokumentationen sowie die Normen von Selectrix.
+- Diese lesen und das dortige für unsere Anwendung berücksichtigen  
+
+4) Decoder-Verhalten / Firmware-Regeln
+- Beim Start immer zuerst auf Mitte (rel 0) fahren.
+- Beim Start explizit melden, ob Konfiguration aus EEPROM geladen wurde.
+- Decoder muss auch mit nur einer programmierten SX-Adresse laufen:
+  - Adresse 0 bedeutet „deaktiviert“
+  - dann nur 8 Servos (eine Adresshälfte) aktiv steuern.
+- Prog-Taste startet Programmiermodus direkt:
+  - TrackBit=0 (Gleis AUS)
+  - D13 AN
+- Beim Beenden des Programmiermodus:
+  - TrackBit=1
+  - D13 AUS
+- Software hat keinen Zugriff auf späteren Gleisstrom-Schalter (kein Endschalter-Feedback):
+  - sichere Softlimits/Kalibrierung zwingend.
+
+5) Bedienung / Setup-Kommandos
+- Bevorzugte reduzierte serielle Bedienung:
+  h, s, 0, p, 1, 2, g, b, o, f, t, v
+  (statt vieler zusätzlicher Kalibrierkommandos).
+- Endlagen-Feinjustage bevorzugt lokal mit 3 Tastern (+, -, Speichern) statt Display/Touch.
+- SX-Bus-Programmierung und Setupstart per seriell „s“ müssen erhalten bleiben.
+
+6) Hinweis Anwender: ob diese Reglen so korrekt sind, kann ich nicht beurteilen. Dazu kenne ich das Programmieren in Seletrix nicht. also anpassen, fals nicht vollständig / Korrekt
+Wizard-/ACK-Regeln (K10..K15)
+- Wizard-Kanäle:
+  K10 CMD: 1 Start, 2 Abort, 3 Save+Ende
+  K11 Servoindex
+  K12 Schrittweite
+  K13 Move
+  K14 Store L/R
+  K15 ACK
+- Befehle als Impuls senden (Wert -> kurz -> 0), um Mehrfachtrigger zu vermeiden.
+- Flanken-/Änderungslogik robust gegen zyklische SX-Schreibungen.
+- ACK/Status sichtbar und eindeutig auswerten.
+
+7) V2-UI/UX-Regeln
+- GUI-Sendelogik und Kommunikationslogik klar trennen.
+- Nur eine zentrale Bus-Auswahl (Single Source of Truth).
+- V2-Move/Store sollen auf Arduino-ACK synchron laufen (keine „blinde“ Zustandsannahme).
+- Für Bildansicht V2 bewährt:
+  - / + = 1 Schritt
+  -- / ++ = 10 Schritte
+- GUI führt lokale Rel-Sollposition je Servo, clamped am GUI-Limit.
+
+8) Telemetrie / Port-Setup
+- Setup nutzt SLX852 (nicht SLX825), 57600 Baud, kontinuierlicher Event-Stream.
+-Setup muss auch SLX825 können. Später wird auch RMX möglich sein können. Andere Selectrixinterfaces habe ich nicht. Sollten wir aber vielleicht auch machen
+- Für stabile Zuordnung /dev/serial/by-id nutzen. (für den Anwender, dann den Portnamen verwenden. Er kennt das so :) )
+- Zuletzt bekannte Zuordnung:
+  Arduino = FTDI A50285BI (das ist dieser Arduioni USB Controller zum Programmieren von Arduino Pro Mini und anderen)
+  Selectrix = FTDI FTF8NBF0 (Das ist der Serial/USB Converter (bitte immer den Anwender dran erinnern, dass er auch korrekt am PC Angeschlossen wurde)
+- ACK-Timeout im Qt kann durch TEL-Port-Kollision entstehen (Qt + SerialMonitor gleichzeitig).
+  Für saubere ACK-Prüfung nur ein aktiver Leser am Telemetrieport.
+
+9) Hardware-/Systemregeln aus dem Gesamtsystem
+- Bei Hardwarethemen Basisplatine V03.00 + Aufsatz als Gesamtsystem betrachten.(opt/programme/selectrix/Servodekoder) wir Arbeiten derzeit mit dieser von Mir umgebauten Basisplatine V2 zu V03.00. Dort kann man die Servos anschliesen) Wenn der Servo Dekoder funktioniert, werden wir dann auch Basisplatine V2 mit Besetzmelderaufsatz und anderen benutzen www.opensx.de )
+- Für Display-Anbindung Basisboard unverändert lassen; Änderungen auf Aufsatzplatine.
+- Für LED-/ULN-/JP2-Lastseite eigene Versorgung bevorzugen; SX-Busstrom für Logikpfad.
+- Externe +5V für Stellpult-LEDs bevorzugen, um SX-Bus/Basisplatine nicht zu überlasten.
+- JP2-Orientierung beachten:
+  Pin 1 = N$6, Pin 20 = N$26 (nicht vertauschen).
+
+10) Offene/zu bestätigende Punkte (zur Ergänzung)
+- Soll „Progmodus anfordern“ in Qt zwingend K10=1 senden oder nur als Hinweis dienen?
+- Soll es eine optionale Diagnosefunktion geben, die testweise beide Busse prüft (nur explizit, nicht automatisch)?
+- Finale Regel für ACK-Timeout-Werte pro Aktion (move/store/mid) festlegen.
+
+---
+Hinweis:
+Diese Datei ist ein Arbeitsstand aus den bisher besprochenen Regeln. Bitte ergänzen/korrigieren.
+Danach programmieren wir strikt nach dieser freigegebenen Regelbasis weiter.
+
+
+PS: bitte frage aktiv nach, wenn der aktuelle Programmierstand/meine Anforderungen eventuell gegen dieses Dokument verstößt. dann reden wir  drüber.. Reglen können auch angepasst werden :)
+
+PS2: im Qt Log, bitte auch noch immer eine Versionsnummer zeigen. Wenn wir die Versionsnummer erhöhen, sollten wir die alten Stände zwischen speichern, damit wir wieder zurück können
+
+PS3: wir arbeiten im Github mit branches, Benutze die Git logig um das korrekt zu machen. 
+

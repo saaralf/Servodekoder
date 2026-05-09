@@ -38,6 +38,10 @@ const uint8_t SERVO_COUNT = 16;
 const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
+const char FW_DECODER_TYPE[] = "servodecoder";
+const char FW_VERSION[] = "2026-05-07a";
+const uint8_t FW_PROTO = 1;
+
 // ---------------- SX Kanalgrenzen ----------------
 const uint8_t SX_ADDR_DISABLED = 0;
 const uint8_t SX_ADDR_MIN = 1;
@@ -301,6 +305,51 @@ void printSetupHelp() {
   Serial.println(F("x = Setup ohne Speichern beenden"));
 }
 
+void setupTelemetryMove(const __FlashStringHelper* src, int16_t step, int8_t moveCmd) {
+  Serial.print(F("ACK_SETUP_MOVE src=")); Serial.print(src);
+  Serial.print(F(" servo=")); Serial.print(setupServo + 1);
+  Serial.print(F(" rel=")); Serial.print(setupRelPos);
+  Serial.print(F(" step=")); Serial.print(step);
+  Serial.print(F(" move=")); Serial.println(moveCmd);
+}
+
+void setupTelemetryState(const __FlashStringHelper* src, const __FlashStringHelper* action) {
+  Serial.print(F("ACK_SETUP_STATE src=")); Serial.print(src);
+  Serial.print(F(" action=")); Serial.print(action);
+  Serial.print(F(" servo=")); Serial.print(setupServo + 1);
+  Serial.print(F(" rel=")); Serial.println(setupRelPos);
+}
+
+void setupTelemetryStore(const __FlashStringHelper* src, int8_t storeCmd) {
+  Serial.print(F("ACK_SETUP_STORE src=")); Serial.print(src);
+  Serial.print(F(" servo=")); Serial.print(setupServo + 1);
+  Serial.print(F(" cmd=")); Serial.print(storeCmd);
+  Serial.print(F(" rel=")); Serial.print(setupRelPos);
+  Serial.print(F(" relMin=")); Serial.print(cfg.servo[setupServo].relMin);
+  Serial.print(F(" relMax=")); Serial.println(cfg.servo[setupServo].relMax);
+}
+
+void emitHello() {
+  Serial.print(F("HELLO decoder=")); Serial.print(FW_DECODER_TYPE);
+  Serial.print(F(" fw=")); Serial.print(FW_VERSION);
+  Serial.print(F(" proto=")); Serial.println(FW_PROTO);
+}
+
+void emitCfgDump() {
+  Serial.print(F("CFG_HDR decoder=")); Serial.print(FW_DECODER_TYPE);
+  Serial.print(F(" fw=")); Serial.print(FW_VERSION);
+  Serial.print(F(" sxA=")); Serial.print(cfg.sxAddrA);
+  Serial.print(F(" sxB=")); Serial.println(cfg.sxAddrB);
+  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+    Serial.print(F("CFG_S servo=")); Serial.print(i + 1);
+    Serial.print(F(" zero=")); Serial.print(cfg.servo[i].zeroPhys);
+    Serial.print(F(" relMin=")); Serial.print(cfg.servo[i].relMin);
+    Serial.print(F(" relMax=")); Serial.print(cfg.servo[i].relMax);
+    Serial.print(F(" divLeft=")); Serial.println(cfg.servo[i].divergingIsLeft);
+  }
+  Serial.println(F("CFG_END"));
+}
+
 void setupSelectServo(uint8_t ch) {
   if (ch >= SERVO_COUNT) ch = SERVO_COUNT - 1;
   setupServo = ch;
@@ -308,6 +357,7 @@ void setupSelectServo(uint8_t ch) {
   setServoRel(setupServo, setupRelPos);
   Serial.print(F("\nServo S")); Serial.print(setupServo + 1);
   Serial.println(F(" aktiv, Mitte angefahren (rel 0)."));
+  setupTelemetryState(F("core"), F("select"));
 }
 
 void setupMoveRel(int16_t delta) {
@@ -357,24 +407,26 @@ void processSetupSerial() {
     switch (c) {
       case 'n': setupSelectServo((setupServo + 1) % SERVO_COUNT); break;
       case 'v': setupSelectServo((setupServo == 0) ? (SERVO_COUNT - 1) : (setupServo - 1)); break;
-      case '0': setupRelPos = 0; setServoRel(setupServo, setupRelPos); Serial.println(F("Mitte (rel 0).")); break;
+      case '0': setupRelPos = 0; setServoRel(setupServo, setupRelPos); Serial.println(F("Mitte (rel 0).")); setupTelemetryState(F("serial"), F("mid")); break;
       case 'l':
         cfg.servo[setupServo].relMin = setupRelPos;
         Serial.print(F("S")); Serial.print(setupServo + 1);
         Serial.print(F(" relMin gespeichert: ")); Serial.println(cfg.servo[setupServo].relMin);
+        setupTelemetryStore(F("serial"), 1);
         break;
       case 'r':
         cfg.servo[setupServo].relMax = setupRelPos;
         Serial.print(F("S")); Serial.print(setupServo + 1);
         Serial.print(F(" relMax gespeichert: ")); Serial.println(cfg.servo[setupServo].relMax);
+        setupTelemetryStore(F("serial"), 2);
         break;
       case '1': setupStep = 1; Serial.println(F("Schrittweite=1")); break;
       case '2': setupStep = 2; Serial.println(F("Schrittweite=2")); break;
       case '5': setupStep = 5; Serial.println(F("Schrittweite=5")); break;
       case 'a': setupStep = 10; Serial.println(F("Schrittweite=10")); break;
       case 'b': setupStep = 20; Serial.println(F("Schrittweite=20")); break;
-      case '+': setupMoveRel(setupStep); break;
-      case '-': setupMoveRel(-setupStep); break;
+      case '+': setupMoveRel(setupStep); setupTelemetryMove(F("serial"), setupStep, 2); break;
+      case '-': setupMoveRel(-setupStep); setupTelemetryMove(F("serial"), setupStep, 1); break;
       case 'w': {
         bool ok = setupValidateAll();
         if (!ok) {
@@ -397,6 +449,12 @@ void processSetupSerial() {
       case 'h':
       case '?':
         printSetupHelp();
+        break;
+      case 'c':
+        emitCfgDump();
+        break;
+      case 't':
+        emitHello();
         break;
       default:
         // Unbekannte/Steuerzeichen ignorieren (z.B. Bus-/Terminal-Noise)
@@ -485,7 +543,8 @@ void setup() {
 
   Serial.println();
   Serial.println(F("SX30 ServoDecoder start"));
-  Serial.println(F("FW-Version: SX30-ServoDecoder 2026-05-04g"));
+  Serial.print(F("FW-Version: SX30-ServoDecoder ")); Serial.println(FW_VERSION);
+  emitHello();
   Serial.println(loadedFromEeprom ? F("CFG: aus EEPROM geladen") : F("CFG: Defaults genutzt"));
   Serial.println(F("Setup starten: 's' senden"));
 
@@ -512,6 +571,7 @@ void processSetupSxWizard() {
   uint8_t store = sx.get(SX_CHAN_SETUP_STORE);
 
   if (cmd != sxSetupLastCmd) {
+    Serial.print(F("ACK_SETUP_CMD src=sx cmd=")); Serial.println(cmd);
     sxSetupLastCmd = cmd;
     if (cmd == 1) {
       startInitialSetup(true);
@@ -550,9 +610,9 @@ void processSetupSxWizard() {
   // Nur 0->Befehl Flanken akzeptieren (robust gegen Bus-Jitter/Mehrfachtelegramme)
   if (move != sxSetupLastMove) {
     if (sxSetupLastMove == 0) {
-      if (move == 1) { setupMoveRel(-setupStep); setupAck(1); }
-      else if (move == 2) { setupMoveRel(setupStep); setupAck(1); }
-      else if (move == 3) { setupRelPos = 0; setServoRel(setupServo, 0); setupAck(1); }
+      if (move == 1) { setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
+      else if (move == 2) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 2); setupAck(1); }
+      else if (move == 3) { setupRelPos = 0; setServoRel(setupServo, 0); setupTelemetryState(F("sx"), F("mid")); setupAck(1); }
     }
     sxSetupLastMove = move;
   }
@@ -561,9 +621,11 @@ void processSetupSxWizard() {
     if (sxSetupLastStore == 0) {
       if (store == 1) {
         cfg.servo[setupServo].relMin = setupRelPos;
+        setupTelemetryStore(F("sx"), 1);
         setupAck(1);
       } else if (store == 2) {
         cfg.servo[setupServo].relMax = setupRelPos;
+        setupTelemetryStore(F("sx"), 2);
         setupAck(1);
       }
     }
@@ -589,6 +651,14 @@ void loop() {
     if (c == 's' || c == 'S') {
       startInitialSetup(false);
       return;
+    }
+    if (c == 't' || c == 'T') {
+      emitHello();
+      continue;
+    }
+    if (c == 'c' || c == 'C') {
+      emitCfgDump();
+      continue;
     }
   }
 
