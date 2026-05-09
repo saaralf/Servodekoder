@@ -624,16 +624,14 @@ private slots:
         if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
 
         bool seenData = false;
-        for(int i=0; i<20 && !seenData; ++i){
+        for(int i=0; i<30 && !seenData; ++i){
             uint8_t b=0;
             int r = ::read(fd, &b, 1);
             if(r==1) seenData = true;
             else usleep(10000);
         }
         if(!seenData){
-            appendLog("Connect abgebrochen: kein SX-Datenverkehr erkannt (falscher Port/kein SLX-Interface?)");
-            statusLbl->setText("no SX interface");
-            ::close(fd); fd=-1; return;
+            appendLog("WARN: kein sofortiger SX-Datenverkehr erkannt. Verbinde trotzdem (Port/BUS bitte prüfen).");
         }
 
         rtbsBus1 = false;
