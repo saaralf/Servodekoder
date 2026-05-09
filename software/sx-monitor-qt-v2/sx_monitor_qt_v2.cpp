@@ -625,10 +625,13 @@ private:
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
                    QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
         setAckPending(servo, "move", 1);
-        if(teleFd>=0){
-            usleep(100000);
-            ::write(teleFd, "c\n", 2);
-            appendLog("TEL TX(auto): c (Move-Verifikation)");
+        if(teleFd>=0 && !cfgImportInProgress){
+            moveAutoCfgCounter++;
+            if((moveAutoCfgCounter % 4) == 0 || moveQueue[servo]==0){
+                usleep(100000);
+                ::write(teleFd, "c\n", 2);
+                appendLog("TEL TX(auto): c (Move-Verifikation, gedrosselt)");
+            }
         }
     }
     void sendVisualWizardStore(int servo, int store){
@@ -953,6 +956,7 @@ private slots:
 
         if(line.startsWith("CFG_HDR ")){
             cfgSeenCount = 0;
+            cfgImportInProgress = true;
             appendLog("TEL: CFG-Import gestartet");
             return;
         }
@@ -983,10 +987,15 @@ private slots:
         }
 
         if(line.startsWith("CFG_END")){
+            cfgImportInProgress = false;
             appendLog(QString("TEL: CFG-Import fertig (%1 Servos)").arg(cfgSeenCount));
-            for(int s=0; s<16; ++s){
-                if(ackPendingType[s] == "store") setAckOk(s, "store");
-                else if(ackPendingType[s] == "move") setAckOk(s, "move");
+            if(cfgSeenCount >= 16){
+                for(int s=0; s<16; ++s){
+                    if(ackPendingType[s] == "store") setAckOk(s, "store");
+                    else if(ackPendingType[s] == "move") setAckOk(s, "move");
+                }
+            } else {
+                appendLog("WARN: CFG-Import unvollstaendig, ACK-Verifikation aus CFG uebersprungen");
             }
             return;
         }
@@ -1120,6 +1129,8 @@ private:
     QString appVersion = APP_VERSION;
     qint64 rxWarmupUntilMs = 0;
     int cfgSeenCount = 0;
+    bool cfgImportInProgress = false;
+    int moveAutoCfgCounter = 0;
     bool visualSetupArmed=false;
     bool visualSetupStarted=false;
     QString ackPendingType[16];
