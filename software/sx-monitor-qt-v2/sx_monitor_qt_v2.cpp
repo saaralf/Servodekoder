@@ -526,13 +526,15 @@ public:
         connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){
             visualSetupArmed=true;
             visualSetupStarted=false;
+            for(int i=0;i<16;++i) moveQueue[i]=0;
             int bus=(sendBusBox->currentText()=="SX1")?1:0;
             wizardPulseK10(bus,1,"V2 SETUP START (K10=1 Impuls)");
             if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: angefordert (K10=1 gesendet), warte auf ACK_SETUP_*");
             appendLog("V2: Setup angefordert. Lokal Taste ist optional, primär startet K10=1 den Wizard.");
+            updateVisualTitles();
         });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); updateVisualTitles(); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); updateVisualTitles(); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -612,6 +614,10 @@ private:
         appendLog(msg);
     }
     void sendVisualWizardMove(int servo, int move){
+        if(sxWizardSessionId==0){
+            appendLog("WARN: MOVE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
+            return;
+        }
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
                    QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
@@ -623,6 +629,10 @@ private:
         }
     }
     void sendVisualWizardStore(int servo, int store){
+        if(sxWizardSessionId==0){
+            appendLog("WARN: STORE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
+            return;
+        }
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
                     QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
