@@ -882,6 +882,11 @@ private slots:
 
     void parseTelemetryLine(const QString &line){
         if(line=="RX:" || line.startsWith("RX:\uFFFD") || line.startsWith("RX:?")) return;
+        bool knownPrefix = line.startsWith("HELLO ") || line.startsWith("ACK_") || line.startsWith("CFG_") || line.startsWith("RX:") || line.startsWith("FW-Version:") || line.startsWith("SX30 ServoDecoder start") || line.startsWith("Setup starten:") || line.startsWith("CFG:");
+        if(!knownPrefix){
+            appendLog(QString("TEL(noise): %1").arg(line));
+            return;
+        }
         appendLog(QString("TEL: %1").arg(line));
 
         if(line.startsWith("HELLO ")){
