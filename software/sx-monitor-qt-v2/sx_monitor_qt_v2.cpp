@@ -468,6 +468,8 @@ public:
         quick1Btn = new QPushButton("1");
         quick255Btn = new QPushButton("255");
         confirmBox = new QCheckBox("Senden bestätigen");
+        rxPauseBox = new QCheckBox("SX-Monitor RX pausieren (nur TX+Telemetrie)");
+        rxPauseBox->setChecked(true);
         bitButtonsBox = new QComboBox;
         bitButtonsBox->addItems({"Bitbuttons aus","Bitbuttons ein"});
 
@@ -476,6 +478,7 @@ public:
         sendL->addWidget(quick0Btn); sendL->addWidget(quick1Btn); sendL->addWidget(quick255Btn);
         sendL->addWidget(sendBtn);
         sendL->addWidget(confirmBox);
+        sendL->addWidget(rxPauseBox);
         root->addWidget(sendBox);
 
         infoLbl = new QLabel("Änderungen gelb markiert • FE A0 bei Connect");
@@ -749,6 +752,7 @@ private slots:
         pollTelemetry();
         checkAckTimeouts();
         if(fd<0) return;
+        if(rxPauseBox && rxPauseBox->isChecked()) return;
         uint8_t buf[512];
         int n = ::read(fd, buf, sizeof(buf));
         if(n<=0) return;
@@ -1022,6 +1026,7 @@ private:
     QSpinBox *sendAdr{}, *sendVal{};
     QPushButton *quick0Btn{}, *quick1Btn{}, *quick255Btn{};
     QCheckBox *confirmBox{};
+    QCheckBox *rxPauseBox{};
     QSpinBox *progAddrA{}, *progAddrB{}, *progServoIdx{};
     QComboBox *progStep{};
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
