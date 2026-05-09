@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09j";
+const char FW_VERSION[] = "2026-05-09k";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -335,6 +335,17 @@ void setupTelemetryStore(const __FlashStringHelper* src, int8_t storeCmd) {
   Serial.print(F(" rel=")); Serial.print(setupRelPos);
   Serial.print(F(" relMin=")); Serial.print(cfg.servo[setupServo].relMin);
   Serial.print(F(" relMax=")); Serial.println(cfg.servo[setupServo].relMax);
+}
+
+void setupTelemetryStoreReject(const __FlashStringHelper* src, int8_t storeCmd, uint8_t sxServo, bool guardActive, bool edgeActive, bool sessionOk) {
+  Serial.print(F("ACK_SETUP_STORE_REJECT src=")); Serial.print(src);
+  Serial.print(F(" cmd=")); Serial.print(storeCmd);
+  Serial.print(F(" sxServo=")); Serial.print((int)sxServo + 1);
+  Serial.print(F(" setupServo=")); Serial.print((int)setupServo + 1);
+  Serial.print(F(" rel=")); Serial.print(setupRelPos);
+  Serial.print(F(" guard=")); Serial.print(guardActive ? 1 : 0);
+  Serial.print(F(" edge=")); Serial.print(edgeActive ? 1 : 0);
+  Serial.print(F(" sessionOk=")); Serial.println(sessionOk ? 1 : 0);
 }
 
 void emitHello() {
@@ -694,7 +705,11 @@ void processSetupSxWizard() {
   }
 
   if (store != sxSetupLastStore) {
-    if (sxSetupLastStore == 0 && millis() <= sxGuardUntilMs && sxServo == setupServo) {
+    bool edgeActive = (sxSetupLastStore == 0);
+    bool guardActive = (millis() <= sxGuardUntilMs);
+    bool sessionOk = (sxActiveSessionId != 0);
+    bool servoMatch = (sxServo == setupServo);
+    if (edgeActive && guardActive && servoMatch) {
       if (store == 1) {
         cfg.servo[setupServo].relMin = setupRelPos;
         setupTelemetryStore(F("sx"), 1);
@@ -704,6 +719,8 @@ void processSetupSxWizard() {
         setupTelemetryStore(F("sx"), 2);
         setupAck(1);
       }
+    } else if (store == 1 || store == 2) {
+      setupTelemetryStoreReject(F("sx"), store, sxServo, guardActive, edgeActive, sessionOk);
     }
     sxSetupLastStore = store;
   }
