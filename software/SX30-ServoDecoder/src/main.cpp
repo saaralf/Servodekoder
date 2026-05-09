@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09c";
+const char FW_VERSION[] = "2026-05-09d";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -99,6 +99,7 @@ uint8_t sxSetupLastServo = 0;
 uint8_t sxSetupLastMove = 0;
 uint8_t sxSetupLastStore = 0;
 bool sxCmdArmed = true;
+unsigned long sxCmdCooldownUntilMs = 0;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -591,13 +592,15 @@ void processSetupSxWizard() {
   uint8_t store = normStore(rawStore);
 
   // CMD nur als entprellte Impulsflanke akzeptieren: erst cmd=0 armt erneut
+  // plus Cooldown gegen spaete Wiederholimpulse (raw=85-Muster)
   if (cmd == 0) {
     sxCmdArmed = true;
-  } else if (sxCmdArmed) {
+  } else if (sxCmdArmed && millis() >= sxCmdCooldownUntilMs) {
     Serial.print(F("ACK_SETUP_CMD src=sx raw=")); Serial.print(rawCmd);
     Serial.print(F(" cmd=")); Serial.println(cmd);
     sxCmdArmed = false;
     sxSetupLastCmd = cmd;
+    sxCmdCooldownUntilMs = millis() + 700;
     if (cmd == 1) {
       startInitialSetup(true);
       setupAck(1);
