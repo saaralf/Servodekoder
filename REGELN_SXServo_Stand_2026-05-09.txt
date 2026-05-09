@@ -21,6 +21,7 @@ SXServo / Servodekoder – Arbeitsregeln (Stand 2026-05-09)
 - Diese lesen und das dortige für unsere Anwendung berücksichtigen  
 
 4) Decoder-Verhalten / Firmware-Regeln
+- Bei jeder funktionalen Firmware-Änderung muss die FW_VERSION in der main.cpp aktiv erhöht werden (sichtbar in HELLO/Startup-Log), bevor getestet wird.
 - Beim Start immer zuerst auf Mitte (rel 0) fahren.
 - Beim Start explizit melden, ob Konfiguration aus EEPROM geladen wurde.
 - Decoder muss auch mit nur einer programmierten SX-Adresse laufen:
