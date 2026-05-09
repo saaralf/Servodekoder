@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09g";
+const char FW_VERSION[] = "2026-05-09h";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -104,6 +104,7 @@ unsigned long sxCmdCooldownUntilMs = 0;
 unsigned long sxPostEndIgnoreUntilMs = 0;
 unsigned long sxGuardUntilMs = 0;
 uint8_t sxActiveSessionId = 0;
+uint8_t sxCmdZeroStableCount = 0;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -601,9 +602,17 @@ void processSetupSxWizard() {
   uint8_t move = normMove(rawMove);
   uint8_t store = normStore(rawStore);
 
+  uint8_t prevZeroStable = sxCmdZeroStableCount;
+  if (cmd == 0) {
+    if (sxCmdZeroStableCount < 255) sxCmdZeroStableCount++;
+  } else {
+    sxCmdZeroStableCount = 0;
+  }
+
   // Start nur akzeptieren, wenn Session gesetzt + K15-Freigabe aktiv + K1 plausibel
+  // und vorher cmd=0 einige Zyklen stabil war (Edge-Detektor gegen raw=85-Flattern)
   if (cmd == 1) {
-    bool startValid = (sxSession != 0) && (k15 == 1) && (k1AddrA == cfg.sxAddrA);
+    bool startValid = (sxSession != 0) && (k15 == 1) && (k1AddrA == cfg.sxAddrA) && (prevZeroStable >= 2);
     if (startValid) {
       sxActiveSessionId = sxSession;
     } else {
