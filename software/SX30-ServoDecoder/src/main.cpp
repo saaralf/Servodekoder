@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09b";
+const char FW_VERSION[] = "2026-05-09c";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -635,8 +635,10 @@ void processSetupSxWizard() {
   // Nur 0->Befehl Flanken akzeptieren (robust gegen Bus-Jitter/Mehrfachtelegramme)
   if (move != sxSetupLastMove) {
     if (sxSetupLastMove == 0) {
-      if (move == 1) { setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
-      else if (move == 2) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 2); setupAck(1); }
+      // SX-Wizard-Richtung: im Feldtest war + aus Qt effektiv invertiert.
+      // Daher fuer SX-Pfad 1/2 gespiegelt behandeln.
+      if (move == 1) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
+      else if (move == 2) { setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 2); setupAck(1); }
       else if (move == 3) { setupRelPos = 0; setServoRel(setupServo, 0); setupTelemetryState(F("sx"), F("mid")); setupAck(1); }
     }
     sxSetupLastMove = move;
