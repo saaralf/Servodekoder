@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09d";
+const char FW_VERSION[] = "2026-05-09e";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -100,6 +100,8 @@ uint8_t sxSetupLastMove = 0;
 uint8_t sxSetupLastStore = 0;
 bool sxCmdArmed = true;
 unsigned long sxCmdCooldownUntilMs = 0;
+unsigned long sxPostEndIgnoreUntilMs = 0;
+unsigned long sxGuardUntilMs = 0;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -568,6 +570,9 @@ void setup() {
 }
 
 void processSetupSxWizard() {
+  const unsigned long nowMs = millis();
+  if (nowMs < sxPostEndIgnoreUntilMs) return;
+
   auto normCmd = [](uint8_t raw)->uint8_t {
     if (raw <= 3) return raw;
     uint8_t lo = (uint8_t)(raw & 0x03);
@@ -603,16 +608,19 @@ void processSetupSxWizard() {
     sxCmdCooldownUntilMs = millis() + 700;
     if (cmd == 1) {
       startInitialSetup(true);
+      sxGuardUntilMs = millis() + 400; // nur kurz danach Move/Store akzeptieren
       setupAck(1);
     } else if (cmd == 2) {
       setupMode = false;
       digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+      sxPostEndIgnoreUntilMs = millis() + 1000;
       setupAck(0);
     } else if (cmd == 3) {
       if (setupValidateAll()) {
         saveConfig();
         setupMode = false;
         digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+        sxPostEndIgnoreUntilMs = millis() + 1000;
         setupAck(1);
       } else {
         setupAck(2);
@@ -637,7 +645,7 @@ void processSetupSxWizard() {
 
   // Nur 0->Befehl Flanken akzeptieren (robust gegen Bus-Jitter/Mehrfachtelegramme)
   if (move != sxSetupLastMove) {
-    if (sxSetupLastMove == 0) {
+    if (sxSetupLastMove == 0 && millis() <= sxGuardUntilMs) {
       // SX-Wizard-Richtung: im Feldtest war + aus Qt effektiv invertiert.
       // Daher fuer SX-Pfad 1/2 gespiegelt behandeln.
       if (move == 1) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
@@ -648,7 +656,7 @@ void processSetupSxWizard() {
   }
 
   if (store != sxSetupLastStore) {
-    if (sxSetupLastStore == 0) {
+    if (sxSetupLastStore == 0 && millis() <= sxGuardUntilMs) {
       if (store == 1) {
         cfg.servo[setupServo].relMin = setupRelPos;
         setupTelemetryStore(F("sx"), 1);

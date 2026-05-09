@@ -40,8 +40,9 @@ GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 
 ## Nächste Schritte
 1. QT-Rückmeldung für lokalen Prog-Tastendruck ergänzen (klarer Statuskanal/ACK: "Prog aktiv/inaktiv").
-2. Optional Servo-Relax als schaltbare Option ergänzen.
-3. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
+2. SX-Wizard Restproblem: sporadische Fremdimpulse auf K10/K13/K14 (raw=85/raw=170) führen zu unerwarteten CMD/Store-Ereignissen; entstören/robust machen.
+3. Optional Servo-Relax als schaltbare Option ergänzen.
+4. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
 
 ## QA Testablauf (3 Programmierwege + Telemetrie)
 0) Voraussetzungen
