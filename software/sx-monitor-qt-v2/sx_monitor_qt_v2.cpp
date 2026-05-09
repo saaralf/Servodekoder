@@ -1028,9 +1028,14 @@ private:
         if(servoArmPos[s] > 90) servoArmPos[s] = 90;
         servoArmWidgets[s]->setAngleDeg(servoArmPos[s]);
     }
+    void setServoTileInputEnabled(int s, bool enabled){
+        if(s<0 || s>=16 || !visualServoBoxes[s]) return;
+        visualServoBoxes[s]->setEnabled(enabled);
+    }
     void setAckPending(int s, const QString &type, int stepCount=1){
         if(s<0 || s>=16) return;
         ackPendingType[s] = type;
+        setServoTileInputEnabled(s, false);
         ackPendingSinceMs[s] = uptime.elapsed();
         qint64 tmo = ackTimeoutBaseMs;
         if(type=="move") tmo += (qint64)std::max(0, stepCount-1) * ackTimeoutPerExtraStepMs;
@@ -1045,6 +1050,7 @@ private:
             ackPendingSinceMs[s] = 0;
             ackTimeoutForServoMs[s] = ackTimeoutBaseMs;
             ackVisualState[s] = "ok";
+            setServoTileInputEnabled(s, true);
             updateVisualTitles();
             appendLog(QString("V2 ACK ok: S%1 %2").arg(s+1).arg(type));
             if(type=="move" && moveQueue[s] != 0){
@@ -1064,6 +1070,7 @@ private:
                 ackPendingType[s].clear();
                 ackPendingSinceMs[s] = 0;
                 ackVisualState[s] = "timeout";
+                setServoTileInputEnabled(s, true);
                 if(visualProgStateLbl && visualSetupArmed && !visualSetupStarted){
                     visualProgStateLbl->setText("Progstatus: INAKTIV (kein ACK, bitte lokale Taste/D13 prüfen)");
                 }
