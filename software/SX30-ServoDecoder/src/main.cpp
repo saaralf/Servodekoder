@@ -566,12 +566,32 @@ void setup() {
 }
 
 void processSetupSxWizard() {
-  uint8_t cmd = sx.get(SX_CHAN_SETUP_CMD);
-  uint8_t move = sx.get(SX_CHAN_SETUP_MOVE);
-  uint8_t store = sx.get(SX_CHAN_SETUP_STORE);
+  auto normCmd = [](uint8_t raw)->uint8_t {
+    if (raw <= 3) return raw;
+    uint8_t lo = (uint8_t)(raw & 0x03);
+    return (lo <= 3) ? lo : 0;
+  };
+  auto normMove = [](uint8_t raw)->uint8_t {
+    if (raw <= 3) return raw;
+    uint8_t lo = (uint8_t)(raw & 0x03);
+    return (lo <= 3) ? lo : 0;
+  };
+  auto normStore = [](uint8_t raw)->uint8_t {
+    if (raw <= 2) return raw;
+    uint8_t lo = (uint8_t)(raw & 0x03);
+    return (lo <= 2) ? lo : 0;
+  };
+
+  uint8_t rawCmd = sx.get(SX_CHAN_SETUP_CMD);
+  uint8_t rawMove = sx.get(SX_CHAN_SETUP_MOVE);
+  uint8_t rawStore = sx.get(SX_CHAN_SETUP_STORE);
+  uint8_t cmd = normCmd(rawCmd);
+  uint8_t move = normMove(rawMove);
+  uint8_t store = normStore(rawStore);
 
   if (cmd != sxSetupLastCmd) {
-    Serial.print(F("ACK_SETUP_CMD src=sx cmd=")); Serial.println(cmd);
+    Serial.print(F("ACK_SETUP_CMD src=sx raw=")); Serial.print(rawCmd);
+    Serial.print(F(" cmd=")); Serial.println(cmd);
     sxSetupLastCmd = cmd;
     if (cmd == 1) {
       startInitialSetup(true);
