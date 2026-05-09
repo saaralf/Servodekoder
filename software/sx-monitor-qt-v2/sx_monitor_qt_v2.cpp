@@ -609,6 +609,11 @@ private:
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
                     QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
         setAckPending(servo, "store");
+        if(teleFd>=0){
+            usleep(120000);
+            ::write(teleFd, "c\n", 2);
+            appendLog("TEL TX(auto): c (Store-Verifikation)");
+        }
     }
 
 private slots:
@@ -942,6 +947,9 @@ private slots:
 
         if(line.startsWith("CFG_END")){
             appendLog(QString("TEL: CFG-Import fertig (%1 Servos)").arg(cfgSeenCount));
+            for(int s=0; s<16; ++s){
+                if(ackPendingType[s] == "store") setAckOk(s, "store");
+            }
             return;
         }
     }
@@ -1081,8 +1089,8 @@ private:
     qint64 ackTimeoutForServoMs[16]{};
     QString ackVisualState[16];
     int moveQueue[16]{};
-    const qint64 ackTimeoutBaseMs = 900;
-    const qint64 ackTimeoutPerExtraStepMs = 120;
+    const qint64 ackTimeoutBaseMs = 1800;
+    const qint64 ackTimeoutPerExtraStepMs = 180;
     int sx0[112], sx1[112];
 };
 
