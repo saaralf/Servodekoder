@@ -29,6 +29,7 @@
 #include <QRegularExpression>
 #include <QElapsedTimer>
 #include <QProcess>
+#include <QRandomGenerator>
 #include <algorithm>
 
 #include <fcntl.h>
@@ -560,6 +561,8 @@ public:
 
 private:
     void wizardPrime(int bus, int addrA, int addrB, int servo, int step){
+        sendSX(bus,9,sxWizardSessionId);
+        usleep(8000);
         sendSX(bus,1,addrA);
         usleep(12000);
         sendSX(bus,2,addrB);
@@ -572,12 +575,22 @@ private:
         usleep(18000);
     }
     void wizardPulseK10(int bus, int val, const QString &msg){
+        if(val==1){
+            sxWizardSessionId = (uint8_t)(1 + (QRandomGenerator::global()->bounded(254)));
+            appendLog(QString("V2 Session-ID gesetzt: %1").arg((int)sxWizardSessionId));
+        }
+        sendSX(bus,9,sxWizardSessionId);
+        usleep(8000);
         sendSX(bus,15,1);
         usleep(15000);
         sendSX(bus,10,val);
         usleep(120000);
         sendSX(bus,10,0);
         usleep(25000);
+        if(val==3 || val==2){
+            sendSX(bus,9,0);
+            sxWizardSessionId = 0;
+        }
         appendLog(msg);
     }
     void wizardMove(int bus, int addrA, int addrB, int servo, int step, int move, const QString &msg){
@@ -1095,6 +1108,7 @@ private:
     qint64 ackTimeoutForServoMs[16]{};
     QString ackVisualState[16];
     int moveQueue[16]{};
+    uint8_t sxWizardSessionId = 0;
     const qint64 ackTimeoutBaseMs = 1800;
     const qint64 ackTimeoutPerExtraStepMs = 180;
     int sx0[112], sx1[112];

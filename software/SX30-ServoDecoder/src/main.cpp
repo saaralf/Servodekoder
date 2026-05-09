@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09e";
+const char FW_VERSION[] = "2026-05-09f";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -55,6 +55,7 @@ const uint8_t SX_CHAN_ORIENT_L  = 3;   // Servo 0..7:  1=Abzweig links, 0=rechts
 const uint8_t SX_CHAN_ORIENT_H  = 4;   // Servo 8..15: 1=Abzweig links, 0=rechts
 
 // Neuer Setup-Wizard (gleiches Verhalten wie Serial-Setup)
+const uint8_t SX_CHAN_SETUP_SESSION = 9; // Session-ID 1..255 (0=invalid)
 const uint8_t SX_CHAN_SETUP_CMD   = 10; // 1=start, 2=abort, 3=save+end
 const uint8_t SX_CHAN_SETUP_SERVO = 11; // 0..15
 const uint8_t SX_CHAN_SETUP_STEP  = 12; // 1/2/5/10/20
@@ -102,6 +103,7 @@ bool sxCmdArmed = true;
 unsigned long sxCmdCooldownUntilMs = 0;
 unsigned long sxPostEndIgnoreUntilMs = 0;
 unsigned long sxGuardUntilMs = 0;
+uint8_t sxActiveSessionId = 0;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -589,12 +591,21 @@ void processSetupSxWizard() {
     return (lo <= 2) ? lo : 0;
   };
 
+  uint8_t sxSession = sx.get(SX_CHAN_SETUP_SESSION);
   uint8_t rawCmd = sx.get(SX_CHAN_SETUP_CMD);
   uint8_t rawMove = sx.get(SX_CHAN_SETUP_MOVE);
   uint8_t rawStore = sx.get(SX_CHAN_SETUP_STORE);
   uint8_t cmd = normCmd(rawCmd);
   uint8_t move = normMove(rawMove);
   uint8_t store = normStore(rawStore);
+
+  // Nur gueltige Session akzeptieren (0 ist immer ungueltig)
+  if (cmd == 1 && sxSession != 0) {
+    sxActiveSessionId = sxSession;
+  }
+  if (sxActiveSessionId == 0 || sxSession != sxActiveSessionId) {
+    return;
+  }
 
   // CMD nur als entprellte Impulsflanke akzeptieren: erst cmd=0 armt erneut
   // plus Cooldown gegen spaete Wiederholimpulse (raw=85-Muster)
@@ -613,6 +624,7 @@ void processSetupSxWizard() {
     } else if (cmd == 2) {
       setupMode = false;
       digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+      sxActiveSessionId = 0;
       sxPostEndIgnoreUntilMs = millis() + 1000;
       setupAck(0);
     } else if (cmd == 3) {
@@ -620,6 +632,7 @@ void processSetupSxWizard() {
         saveConfig();
         setupMode = false;
         digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+        sxActiveSessionId = 0;
         sxPostEndIgnoreUntilMs = millis() + 1000;
         setupAck(1);
       } else {
