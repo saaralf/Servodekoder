@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09h";
+const char FW_VERSION[] = "2026-05-09i";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -687,7 +687,7 @@ void processSetupSxWizard() {
   }
 
   if (store != sxSetupLastStore) {
-    if (sxSetupLastStore == 0 && millis() <= sxGuardUntilMs) {
+    if (sxSetupLastStore == 0 && millis() <= sxGuardUntilMs && sxServo == setupServo) {
       if (store == 1) {
         cfg.servo[setupServo].relMin = setupRelPos;
         setupTelemetryStore(F("sx"), 1);

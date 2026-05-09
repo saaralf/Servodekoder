@@ -527,6 +527,7 @@ public:
             visualSetupArmed=true;
             visualSetupStarted=false;
             for(int i=0;i<16;++i) moveQueue[i]=0;
+            wizardLockedServo = -1;
             int bus=(sendBusBox->currentText()=="SX1")?1:0;
             wizardPulseK10(bus,1,"V2 SETUP START (K10=1 Impuls)");
             if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: angefordert (K10=1 gesendet), warte auf ACK_SETUP_*");
@@ -618,6 +619,8 @@ private:
             appendLog("WARN: MOVE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
             return;
         }
+        if(wizardLockedServo<0) wizardLockedServo = servo;
+        if(servo != wizardLockedServo){ appendLog(QString("WARN: MOVE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
                    QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
@@ -633,6 +636,8 @@ private:
             appendLog("WARN: STORE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
             return;
         }
+        if(wizardLockedServo<0) wizardLockedServo = servo;
+        if(servo != wizardLockedServo){ appendLog(QString("WARN: STORE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
                     QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
@@ -913,6 +918,10 @@ private slots:
             if(m.hasMatch()){
                 int s = m.captured(1).toInt()-1;
                 if(s>=0 && s<16){
+                    if(wizardLockedServo>=0 && s!=wizardLockedServo && line.contains("action=select")){
+                        appendLog(QString("TEL: ACK_SETUP_STATE select S%1 ignoriert (Wizard-Lock S%2)").arg(s+1).arg(wizardLockedServo+1));
+                        return;
+                    }
                     visualSetupStarted = true;
                     visualSetupArmed = false;
                     if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_STATE)");
@@ -1119,6 +1128,7 @@ private:
     QString ackVisualState[16];
     int moveQueue[16]{};
     uint8_t sxWizardSessionId = 0;
+    int wizardLockedServo = -1;
     const qint64 ackTimeoutBaseMs = 1800;
     const qint64 ackTimeoutPerExtraStepMs = 180;
     int sx0[112], sx1[112];
