@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09l";
+const char FW_VERSION[] = "2026-05-09m";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -591,19 +591,13 @@ void processSetupSxWizard() {
   if (nowMs < sxPostEndIgnoreUntilMs) return;
 
   auto normCmd = [](uint8_t raw)->uint8_t {
-    if (raw <= 3) return raw;
-    uint8_t lo = (uint8_t)(raw & 0x03);
-    return (lo <= 3) ? lo : 0;
+    return (raw <= 3) ? raw : 0;
   };
   auto normMove = [](uint8_t raw)->uint8_t {
-    if (raw <= 3) return raw;
-    uint8_t lo = (uint8_t)(raw & 0x03);
-    return (lo <= 3) ? lo : 0;
+    return (raw <= 3) ? raw : 0;
   };
   auto normStore = [](uint8_t raw)->uint8_t {
-    if (raw <= 2) return raw;
-    uint8_t lo = (uint8_t)(raw & 0x03);
-    return (lo <= 2) ? lo : 0;
+    return (raw <= 2) ? raw : 0;
   };
 
   uint8_t sxSession = sx.get(SX_CHAN_SETUP_SESSION);
