@@ -28,6 +28,8 @@
 #include <QFileInfo>
 #include <QRegularExpression>
 #include <QElapsedTimer>
+#include <QProcess>
+#include <QRandomGenerator>
 #include <algorithm>
 
 #include <fcntl.h>
@@ -35,6 +37,22 @@
 #include <termios.h>
 
 static const char* APP_VERSION = "2026-05-09-main";
+
+static QString detectGitVersion(){
+    QProcess p;
+    p.start("git", {"rev-parse", "--abbrev-ref", "HEAD"});
+    if(!p.waitForFinished(400)) return QString(APP_VERSION);
+    QString branch = QString::fromUtf8(p.readAllStandardOutput()).trimmed();
+    if(branch.isEmpty()) return QString(APP_VERSION);
+
+    QProcess p2;
+    p2.start("git", {"rev-parse", "--short", "HEAD"});
+    if(!p2.waitForFinished(400)) return branch;
+    QString sha = QString::fromUtf8(p2.readAllStandardOutput()).trimmed();
+    if(sha.isEmpty()) return branch;
+
+    return QString("%1@%2").arg(branch, sha);
+}
 
 static bool set_serial(int fd, int baud){
     termios tty{};
@@ -168,7 +186,8 @@ class MainWin : public QMainWindow {
     Q_OBJECT
 public:
     MainWin(){
-        setWindowTitle(QString("SX Monitor – SLX852 (SX0/SX1) | %1").arg(APP_VERSION));
+        appVersion = detectGitVersion();
+        setWindowTitle(QString("SX Monitor – SLX852 (SX0/SX1) | %1").arg(appVersion));
         resize(1280, 860);
         uptime.start();
 
@@ -255,7 +274,7 @@ public:
 
         logView = new QTextEdit; logView->setReadOnly(true);
         tabs->addTab(logView, "Änderungsprotokoll");
-        appendLog(QString("SX-Monitor-Qt V2 gestartet | Version: %1").arg(APP_VERSION));
+        appendLog(QString("SX-Monitor-Qt V2 gestartet | Version: %1").arg(appVersion));
 
         auto *progTab = new QWidget;
         auto *progL = new QVBoxLayout(progTab);
@@ -468,6 +487,8 @@ public:
         quick1Btn = new QPushButton("1");
         quick255Btn = new QPushButton("255");
         confirmBox = new QCheckBox("Senden bestätigen");
+        rxPauseBox = new QCheckBox("SX-Monitor RX pausieren (nur TX+Telemetrie)");
+        rxPauseBox->setChecked(true);
         bitButtonsBox = new QComboBox;
         bitButtonsBox->addItems({"Bitbuttons aus","Bitbuttons ein"});
 
@@ -476,6 +497,7 @@ public:
         sendL->addWidget(quick0Btn); sendL->addWidget(quick1Btn); sendL->addWidget(quick255Btn);
         sendL->addWidget(sendBtn);
         sendL->addWidget(confirmBox);
+        sendL->addWidget(rxPauseBox);
         root->addWidget(sendBox);
 
         infoLbl = new QLabel("Änderungen gelb markiert • FE A0 bei Connect");
@@ -504,13 +526,16 @@ public:
         connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){
             visualSetupArmed=true;
             visualSetupStarted=false;
+            for(int i=0;i<16;++i) moveQueue[i]=0;
+            wizardLockedServo = -1;
             int bus=(sendBusBox->currentText()=="SX1")?1:0;
             wizardPulseK10(bus,1,"V2 SETUP START (K10=1 Impuls)");
             if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: angefordert (K10=1 gesendet), warte auf ACK_SETUP_*");
             appendLog("V2: Setup angefordert. Lokal Taste ist optional, primär startet K10=1 den Wizard.");
+            updateVisualTitles();
         });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); updateVisualTitles(); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); updateVisualTitles(); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
@@ -538,40 +563,93 @@ public:
     ~MainWin(){ doDisconnect(); }
 
 private:
+    void wizardPrime(int bus, int addrA, int addrB, int servo, int step){
+        sendSX(bus,9,sxWizardSessionId);
+        usleep(8000);
+        sendSX(bus,1,addrA);
+        usleep(12000);
+        sendSX(bus,2,addrB);
+        usleep(12000);
+        sendSX(bus,11,servo);
+        usleep(12000);
+        sendSX(bus,12,step);
+        usleep(12000);
+        sendSX(bus,15,1); // Setup-Freigabe aktiv halten
+        usleep(18000);
+    }
     void wizardPulseK10(int bus, int val, const QString &msg){
-        sendSX(bus,10,val); usleep(50000); sendSX(bus,10,0); usleep(10000);
+        if(val==1){
+            sxWizardSessionId = (uint8_t)(1 + (QRandomGenerator::global()->bounded(254)));
+            appendLog(QString("V2 Session-ID gesetzt: %1").arg((int)sxWizardSessionId));
+        }
+        sendSX(bus,9,sxWizardSessionId);
+        usleep(8000);
+        sendSX(bus,15,1);
+        usleep(15000);
+        sendSX(bus,10,val);
+        usleep(120000);
+        sendSX(bus,10,0);
+        usleep(25000);
+        if(val==3 || val==2){
+            sendSX(bus,9,0);
+            sxWizardSessionId = 0;
+        }
         appendLog(msg);
     }
     void wizardMove(int bus, int addrA, int addrB, int servo, int step, int move, const QString &msg){
-        sendSX(bus,1,addrA);
-        sendSX(bus,2,addrB);
-        sendSX(bus,15,1); // Setup-Freigabe aktiv halten
-        sendSX(bus,11,servo);
-        sendSX(bus,12,step);
-        sendSX(bus,13,move); usleep(50000); sendSX(bus,13,0); usleep(10000);
+        wizardPrime(bus, addrA, addrB, servo, step);
+        sendSX(bus,13,move);
+        usleep(120000);
+        sendSX(bus,13,0);
+        usleep(25000);
         appendLog(msg);
         appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6")
                   .arg(bus?"SX1":"SX0").arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
     }
     void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
-        sendSX(bus,1,addrA);
-        sendSX(bus,2,addrB);
-        sendSX(bus,15,1); // Setup-Freigabe aktiv halten
-        sendSX(bus,11,servo);
-        sendSX(bus,14,store); usleep(50000); sendSX(bus,14,0); usleep(10000);
+        wizardPrime(bus, addrA, addrB, servo, 5);
+        sendSX(bus,14,store);
+        usleep(120000);
+        sendSX(bus,14,0);
+        usleep(25000);
         appendLog(msg);
     }
     void sendVisualWizardMove(int servo, int move){
+        if(sxWizardSessionId==0){
+            appendLog("WARN: MOVE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
+            return;
+        }
+        if(wizardLockedServo<0) wizardLockedServo = servo;
+        if(servo != wizardLockedServo){ appendLog(QString("WARN: MOVE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
                    QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
         setAckPending(servo, "move", 1);
+        if(teleFd>=0 && !cfgImportInProgress){
+            moveAutoCfgCounter++;
+            if((moveAutoCfgCounter % 4) == 0 || moveQueue[servo]==0){
+                usleep(100000);
+                ::write(teleFd, "c\n", 2);
+                appendLog("TEL TX(auto): c (Move-Verifikation, gedrosselt)");
+            }
+        }
     }
     void sendVisualWizardStore(int servo, int store){
+        if(sxWizardSessionId==0){
+            appendLog("WARN: STORE blockiert (keine aktive Session-ID). Erst Setup START ausführen.");
+            return;
+        }
+        if(wizardLockedServo<0) wizardLockedServo = servo;
+        if(servo != wizardLockedServo){ appendLog(QString("WARN: STORE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
         int bus=(sendBusBox->currentText()=="SX1")?1:0;
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
                     QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
         setAckPending(servo, "store");
+        if(teleFd>=0){
+            usleep(120000);
+            ::write(teleFd, "c\n", 2);
+            appendLog("TEL TX(auto): c (Store-Verifikation)");
+        }
     }
 
 private slots:
@@ -587,16 +665,14 @@ private slots:
         if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
 
         bool seenData = false;
-        for(int i=0; i<20 && !seenData; ++i){
+        for(int i=0; i<30 && !seenData; ++i){
             uint8_t b=0;
             int r = ::read(fd, &b, 1);
             if(r==1) seenData = true;
             else usleep(10000);
         }
         if(!seenData){
-            appendLog("Connect abgebrochen: kein SX-Datenverkehr erkannt (falscher Port/kein SLX-Interface?)");
-            statusLbl->setText("no SX interface");
-            ::close(fd); fd=-1; return;
+            appendLog("WARN: kein sofortiger SX-Datenverkehr erkannt. Verbinde trotzdem (Port/BUS bitte prüfen).");
         }
 
         rtbsBus1 = false;
@@ -733,6 +809,7 @@ private slots:
         pollTelemetry();
         checkAckTimeouts();
         if(fd<0) return;
+        if(rxPauseBox && rxPauseBox->isChecked()) return;
         uint8_t buf[512];
         int n = ::read(fd, buf, sizeof(buf));
         if(n<=0) return;
@@ -838,18 +915,27 @@ private slots:
             return;
         }
 
-        if(line.startsWith("ACK_SETUP_STATE ") && line.contains("action=mid")){
+        if(line.startsWith("ACK_SETUP_STATE ")){
             QRegularExpression re("servo=(\\d+)");
             auto m = re.match(line);
             if(m.hasMatch()){
                 int s = m.captured(1).toInt()-1;
                 if(s>=0 && s<16){
+                    if(wizardLockedServo>=0 && s!=wizardLockedServo && line.contains("action=select")){
+                        appendLog(QString("TEL: ACK_SETUP_STATE select S%1 ignoriert (Wizard-Lock S%2)").arg(s+1).arg(wizardLockedServo+1));
+                        return;
+                    }
                     visualSetupStarted = true;
                     visualSetupArmed = false;
                     if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_STATE)");
-                    servoArmPos[s] = 0;
-                    updateServoArmLabel(s);
-                    setAckOk(s, "move");
+                    if(line.contains("action=mid")){
+                        servoArmPos[s] = 0;
+                        updateServoArmLabel(s);
+                        setAckOk(s, "move");
+                    } else if(line.contains("action=select")){
+                        // Select bestaetigt aktiven Wizard/Servo; offene Move-Wartezustände für diesen Servo freigeben
+                        if(!ackPendingType[s].isEmpty() && ackPendingType[s] == "move") setAckOk(s, "move");
+                    }
                 }
             }
             return;
@@ -870,6 +956,7 @@ private slots:
 
         if(line.startsWith("CFG_HDR ")){
             cfgSeenCount = 0;
+            cfgImportInProgress = true;
             appendLog("TEL: CFG-Import gestartet");
             return;
         }
@@ -900,7 +987,16 @@ private slots:
         }
 
         if(line.startsWith("CFG_END")){
+            cfgImportInProgress = false;
             appendLog(QString("TEL: CFG-Import fertig (%1 Servos)").arg(cfgSeenCount));
+            if(cfgSeenCount >= 16){
+                for(int s=0; s<16; ++s){
+                    if(ackPendingType[s] == "store") setAckOk(s, "store");
+                    else if(ackPendingType[s] == "move") setAckOk(s, "move");
+                }
+            } else {
+                appendLog("WARN: CFG-Import unvollstaendig, ACK-Verifikation aus CFG uebersprungen");
+            }
             return;
         }
     }
@@ -1006,6 +1102,7 @@ private:
     QSpinBox *sendAdr{}, *sendVal{};
     QPushButton *quick0Btn{}, *quick1Btn{}, *quick255Btn{};
     QCheckBox *confirmBox{};
+    QCheckBox *rxPauseBox{};
     QSpinBox *progAddrA{}, *progAddrB{}, *progServoIdx{};
     QComboBox *progStep{};
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
@@ -1029,8 +1126,11 @@ private:
     int teleAsciiScore = 0;
     bool rtbsBus1=false;
     QElapsedTimer uptime;
+    QString appVersion = APP_VERSION;
     qint64 rxWarmupUntilMs = 0;
     int cfgSeenCount = 0;
+    bool cfgImportInProgress = false;
+    int moveAutoCfgCounter = 0;
     bool visualSetupArmed=false;
     bool visualSetupStarted=false;
     QString ackPendingType[16];
@@ -1038,8 +1138,10 @@ private:
     qint64 ackTimeoutForServoMs[16]{};
     QString ackVisualState[16];
     int moveQueue[16]{};
-    const qint64 ackTimeoutBaseMs = 900;
-    const qint64 ackTimeoutPerExtraStepMs = 120;
+    uint8_t sxWizardSessionId = 0;
+    int wizardLockedServo = -1;
+    const qint64 ackTimeoutBaseMs = 1800;
+    const qint64 ackTimeoutPerExtraStepMs = 180;
     int sx0[112], sx1[112];
 };
 

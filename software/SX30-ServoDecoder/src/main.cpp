@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-07a";
+const char FW_VERSION[] = "2026-05-09j";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -55,6 +55,7 @@ const uint8_t SX_CHAN_ORIENT_L  = 3;   // Servo 0..7:  1=Abzweig links, 0=rechts
 const uint8_t SX_CHAN_ORIENT_H  = 4;   // Servo 8..15: 1=Abzweig links, 0=rechts
 
 // Neuer Setup-Wizard (gleiches Verhalten wie Serial-Setup)
+const uint8_t SX_CHAN_SETUP_SESSION = 9; // Session-ID 1..255 (0=invalid)
 const uint8_t SX_CHAN_SETUP_CMD   = 10; // 1=start, 2=abort, 3=save+end
 const uint8_t SX_CHAN_SETUP_SERVO = 11; // 0..15
 const uint8_t SX_CHAN_SETUP_STEP  = 12; // 1/2/5/10/20
@@ -98,6 +99,13 @@ uint8_t sxSetupLastCmd = 0;
 uint8_t sxSetupLastServo = 0;
 uint8_t sxSetupLastMove = 0;
 uint8_t sxSetupLastStore = 0;
+bool sxCmdArmed = true;
+unsigned long sxCmdCooldownUntilMs = 0;
+unsigned long sxPostEndIgnoreUntilMs = 0;
+unsigned long sxGuardUntilMs = 0;
+uint8_t sxActiveSessionId = 0;
+uint8_t sxCmdZeroStableCount = 0;
+int8_t sxLockedServo = -1;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
@@ -566,25 +574,90 @@ void setup() {
 }
 
 void processSetupSxWizard() {
-  uint8_t cmd = sx.get(SX_CHAN_SETUP_CMD);
-  uint8_t move = sx.get(SX_CHAN_SETUP_MOVE);
-  uint8_t store = sx.get(SX_CHAN_SETUP_STORE);
+  const unsigned long nowMs = millis();
+  if (nowMs < sxPostEndIgnoreUntilMs) return;
 
-  if (cmd != sxSetupLastCmd) {
-    Serial.print(F("ACK_SETUP_CMD src=sx cmd=")); Serial.println(cmd);
+  auto normCmd = [](uint8_t raw)->uint8_t {
+    if (raw <= 3) return raw;
+    uint8_t lo = (uint8_t)(raw & 0x03);
+    return (lo <= 3) ? lo : 0;
+  };
+  auto normMove = [](uint8_t raw)->uint8_t {
+    if (raw <= 3) return raw;
+    uint8_t lo = (uint8_t)(raw & 0x03);
+    return (lo <= 3) ? lo : 0;
+  };
+  auto normStore = [](uint8_t raw)->uint8_t {
+    if (raw <= 2) return raw;
+    uint8_t lo = (uint8_t)(raw & 0x03);
+    return (lo <= 2) ? lo : 0;
+  };
+
+  uint8_t sxSession = sx.get(SX_CHAN_SETUP_SESSION);
+  uint8_t rawCmd = sx.get(SX_CHAN_SETUP_CMD);
+  uint8_t rawMove = sx.get(SX_CHAN_SETUP_MOVE);
+  uint8_t rawStore = sx.get(SX_CHAN_SETUP_STORE);
+  uint8_t k15 = sx.get(SX_CHAN_SETUP_ACK);
+  uint8_t k1AddrA = sx.get(SX_CHAN_ADDR_A);
+  uint8_t cmd = normCmd(rawCmd);
+  uint8_t move = normMove(rawMove);
+  uint8_t store = normStore(rawStore);
+
+  uint8_t prevZeroStable = sxCmdZeroStableCount;
+  if (cmd == 0) {
+    if (sxCmdZeroStableCount < 255) sxCmdZeroStableCount++;
+  } else {
+    sxCmdZeroStableCount = 0;
+  }
+
+  // Start nur akzeptieren, wenn Session gesetzt + K15-Freigabe aktiv + K1 plausibel
+  // und vorher cmd=0 einige Zyklen stabil war (Edge-Detektor gegen raw=85-Flattern)
+  if (cmd == 1) {
+    bool startValid = (sxSession != 0) && (k15 == 1) && (k1AddrA == cfg.sxAddrA) && (prevZeroStable >= 2);
+    if (startValid) {
+      sxActiveSessionId = sxSession;
+    } else {
+      return;
+    }
+  }
+
+  // Fuer alle weiteren Wizard-Befehle muss die aktive Session exakt passen
+  if (sxActiveSessionId == 0 || sxSession != sxActiveSessionId) {
+    return;
+  }
+
+  // CMD nur als entprellte Impulsflanke akzeptieren: erst cmd=0 armt erneut
+  // plus Cooldown gegen spaete Wiederholimpulse (raw=85-Muster)
+  if (cmd == 0) {
+    sxCmdArmed = true;
+  } else if (sxCmdArmed && millis() >= sxCmdCooldownUntilMs) {
+    Serial.print(F("ACK_SETUP_CMD src=sx raw=")); Serial.print(rawCmd);
+    Serial.print(F(" cmd=")); Serial.println(cmd);
+    sxCmdArmed = false;
     sxSetupLastCmd = cmd;
+    sxCmdCooldownUntilMs = millis() + 700;
     if (cmd == 1) {
       startInitialSetup(true);
+      sxLockedServo = (int8_t)sx.get(SX_CHAN_SETUP_SERVO);
+      if (sxLockedServo < 0 || sxLockedServo >= SERVO_COUNT) sxLockedServo = setupServo;
+      if ((uint8_t)sxLockedServo != setupServo) setupSelectServo((uint8_t)sxLockedServo);
+      sxGuardUntilMs = millis() + 400; // nur kurz danach Move/Store akzeptieren
       setupAck(1);
     } else if (cmd == 2) {
       setupMode = false;
       digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+      sxActiveSessionId = 0;
+      sxLockedServo = -1;
+      sxPostEndIgnoreUntilMs = millis() + 1000;
       setupAck(0);
     } else if (cmd == 3) {
       if (setupValidateAll()) {
         saveConfig();
         setupMode = false;
         digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+        sxActiveSessionId = 0;
+        sxLockedServo = -1;
+        sxPostEndIgnoreUntilMs = millis() + 1000;
         setupAck(1);
       } else {
         setupAck(2);
@@ -596,6 +669,7 @@ void processSetupSxWizard() {
 
   uint8_t sxServo = sx.get(SX_CHAN_SETUP_SERVO);
   if (sxServo >= SERVO_COUNT) sxServo = SERVO_COUNT - 1;
+  if (sxLockedServo >= 0) sxServo = (uint8_t)sxLockedServo;
   if (sxServo != sxSetupLastServo) {
     sxSetupLastServo = sxServo;
     if (sxServo != setupServo) {
@@ -609,16 +683,18 @@ void processSetupSxWizard() {
 
   // Nur 0->Befehl Flanken akzeptieren (robust gegen Bus-Jitter/Mehrfachtelegramme)
   if (move != sxSetupLastMove) {
-    if (sxSetupLastMove == 0) {
-      if (move == 1) { setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
-      else if (move == 2) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 2); setupAck(1); }
+    if (sxSetupLastMove == 0 && millis() <= sxGuardUntilMs) {
+      // SX-Wizard-Richtung: im Feldtest war + aus Qt effektiv invertiert.
+      // Daher fuer SX-Pfad 1/2 gespiegelt behandeln.
+      if (move == 1) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
+      else if (move == 2) { setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 2); setupAck(1); }
       else if (move == 3) { setupRelPos = 0; setServoRel(setupServo, 0); setupTelemetryState(F("sx"), F("mid")); setupAck(1); }
     }
     sxSetupLastMove = move;
   }
 
   if (store != sxSetupLastStore) {
-    if (sxSetupLastStore == 0) {
+    if (sxSetupLastStore == 0 && millis() <= sxGuardUntilMs && sxServo == setupServo) {
       if (store == 1) {
         cfg.servo[setupServo].relMin = setupRelPos;
         setupTelemetryStore(F("sx"), 1);
