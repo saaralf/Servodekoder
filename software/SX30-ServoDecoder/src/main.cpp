@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09k";
+const char FW_VERSION[] = "2026-05-09l";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -313,10 +313,12 @@ void printSetupHelp() {
   Serial.println(F("x = Setup ohne Speichern beenden"));
 }
 
-void setupTelemetryMove(const __FlashStringHelper* src, int16_t step, int8_t moveCmd) {
+void setupTelemetryMove(const __FlashStringHelper* src, int16_t step, int8_t moveCmd, int16_t relBefore, int16_t relAfter) {
   Serial.print(F("ACK_SETUP_MOVE src=")); Serial.print(src);
   Serial.print(F(" servo=")); Serial.print(setupServo + 1);
   Serial.print(F(" rel=")); Serial.print(setupRelPos);
+  Serial.print(F(" relBefore=")); Serial.print(relBefore);
+  Serial.print(F(" relAfter=")); Serial.print(relAfter);
   Serial.print(F(" step=")); Serial.print(step);
   Serial.print(F(" move=")); Serial.println(moveCmd);
 }
@@ -444,8 +446,8 @@ void processSetupSerial() {
       case '5': setupStep = 5; Serial.println(F("Schrittweite=5")); break;
       case 'a': setupStep = 10; Serial.println(F("Schrittweite=10")); break;
       case 'b': setupStep = 20; Serial.println(F("Schrittweite=20")); break;
-      case '+': setupMoveRel(setupStep); setupTelemetryMove(F("serial"), setupStep, 2); break;
-      case '-': setupMoveRel(-setupStep); setupTelemetryMove(F("serial"), setupStep, 1); break;
+      case '+': { int16_t b=setupRelPos; setupMoveRel(setupStep); setupTelemetryMove(F("serial"), setupStep, 2, b, setupRelPos); } break;
+      case '-': { int16_t b=setupRelPos; setupMoveRel(-setupStep); setupTelemetryMove(F("serial"), setupStep, 1, b, setupRelPos); } break;
       case 'w': {
         bool ok = setupValidateAll();
         if (!ok) {
@@ -697,9 +699,9 @@ void processSetupSxWizard() {
     if (sxSetupLastMove == 0 && millis() <= sxGuardUntilMs) {
       // SX-Wizard-Richtung: im Feldtest war + aus Qt effektiv invertiert.
       // Daher fuer SX-Pfad 1/2 gespiegelt behandeln.
-      if (move == 1) { setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 1); setupAck(1); }
-      else if (move == 2) { setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 2); setupAck(1); }
-      else if (move == 3) { setupRelPos = 0; setServoRel(setupServo, 0); setupTelemetryState(F("sx"), F("mid")); setupAck(1); }
+      if (move == 1) { int16_t b=setupRelPos; setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 1, b, setupRelPos); setupAck(1); }
+      else if (move == 2) { int16_t b=setupRelPos; setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 2, b, setupRelPos); setupAck(1); }
+      else if (move == 3) { int16_t b=setupRelPos; setupRelPos = 0; setServoRel(setupServo, 0); setupTelemetryMove(F("sx"), setupStep, 3, b, setupRelPos); setupTelemetryState(F("sx"), F("mid")); setupAck(1); }
     }
     sxSetupLastMove = move;
   }
