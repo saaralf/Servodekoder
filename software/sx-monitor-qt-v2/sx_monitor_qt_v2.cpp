@@ -995,13 +995,8 @@ private slots:
         if(line.startsWith("CFG_END")){
             cfgImportInProgress = false;
             appendLog(QString("TEL: CFG-Import fertig (%1 Servos)").arg(cfgSeenCount));
-            if(cfgSeenCount >= 16){
-                for(int s=0; s<16; ++s){
-                    if(ackPendingType[s] == "store") setAckOk(s, "store");
-                    else if(ackPendingType[s] == "move") setAckOk(s, "move");
-                }
-            } else {
-                appendLog("WARN: CFG-Import unvollstaendig, ACK-Verifikation aus CFG uebersprungen");
+            if(cfgSeenCount < 16){
+                appendLog("WARN: CFG-Import unvollstaendig");
             }
             return;
         }
@@ -1072,7 +1067,7 @@ private:
         for(int s=0; s<16; ++s){
             if(ackPendingType[s].isEmpty()) continue;
             if((now - ackPendingSinceMs[s]) >= ackTimeoutForServoMs[s]){
-                appendLog(QString("V2 ACK timeout: S%1 %2").arg(s+1).arg(ackPendingType[s]));
+                appendLog(QString("V2 ACK timeout: S%1 %2 (keine echte Decoder-ACK-Zeile)").arg(s+1).arg(ackPendingType[s]));
                 ackPendingType[s].clear();
                 ackPendingSinceMs[s] = 0;
                 ackVisualState[s] = "timeout";
