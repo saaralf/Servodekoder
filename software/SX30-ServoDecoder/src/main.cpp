@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09f";
+const char FW_VERSION[] = "2026-05-09g";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -595,14 +595,23 @@ void processSetupSxWizard() {
   uint8_t rawCmd = sx.get(SX_CHAN_SETUP_CMD);
   uint8_t rawMove = sx.get(SX_CHAN_SETUP_MOVE);
   uint8_t rawStore = sx.get(SX_CHAN_SETUP_STORE);
+  uint8_t k15 = sx.get(SX_CHAN_SETUP_ACK);
+  uint8_t k1AddrA = sx.get(SX_CHAN_ADDR_A);
   uint8_t cmd = normCmd(rawCmd);
   uint8_t move = normMove(rawMove);
   uint8_t store = normStore(rawStore);
 
-  // Nur gueltige Session akzeptieren (0 ist immer ungueltig)
-  if (cmd == 1 && sxSession != 0) {
-    sxActiveSessionId = sxSession;
+  // Start nur akzeptieren, wenn Session gesetzt + K15-Freigabe aktiv + K1 plausibel
+  if (cmd == 1) {
+    bool startValid = (sxSession != 0) && (k15 == 1) && (k1AddrA == cfg.sxAddrA);
+    if (startValid) {
+      sxActiveSessionId = sxSession;
+    } else {
+      return;
+    }
   }
+
+  // Fuer alle weiteren Wizard-Befehle muss die aktive Session exakt passen
   if (sxActiveSessionId == 0 || sxSession != sxActiveSessionId) {
     return;
   }
