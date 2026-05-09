@@ -352,6 +352,11 @@ public:
         busRow->setContentsMargins(0,0,0,0);
         busRow->setSpacing(6);
         busRow->addWidget(new QLabel("SX-Bus: zentral über 'SX Senden'"));
+        progPathBox = new QComboBox;
+        progPathBox->addItem("SX-Wizard");
+        progPathBox->addItem("Serial-Wizard");
+        busRow->addWidget(new QLabel("Programmierweg:"));
+        busRow->addWidget(progPathBox);
         busRow->addStretch(1);
         visualL->addLayout(busRow);
 
@@ -585,43 +590,49 @@ private:
         sendSX(bus,15,1); // Setup-Freigabe aktiv halten
         usleep(18000);
     }
+    bool useSerialWizard() const { return progPathBox && progPathBox->currentText()=="Serial-Wizard"; }
+    bool sendSerialWizardChar(char c, const QString &tag){
+        if(teleFd<0){ appendLog("WARN: Serial-Wizard: Telemetrie-Port nicht verbunden"); return false; }
+        char out[2]={c,'\n'}; ::write(teleFd,out,2);
+        appendLog(QString("SER TX(%1): %2").arg(tag).arg(QChar(c)));
+        return true;
+    }
     void wizardPulseK10(int bus, int val, const QString &msg){
+        if(useSerialWizard()){
+            if(val==1) sendSerialWizardChar('s', "start");
+            else if(val==3) sendSerialWizardChar('w', "save-end");
+            else if(val==2) sendSerialWizardChar('x', "abort");
+            if(val==3 || val==2) sxWizardSessionId=0;
+            appendLog(msg + " [via SERIAL]");
+            return;
+        }
         if(val==1){
             static const uint8_t sidPool[] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63};
             sxWizardSessionId = sidPool[QRandomGenerator::global()->bounded((int)(sizeof(sidPool)/sizeof(sidPool[0])) )];
             appendLog(QString("V2 Session-ID gesetzt: %1").arg((int)sxWizardSessionId));
         }
-        sendSX(bus,9,sxWizardSessionId);
-        usleep(8000);
-        sendSX(bus,15,1);
-        usleep(15000);
-        sendSX(bus,10,val);
-        usleep(120000);
-        sendSX(bus,10,0);
-        usleep(25000);
-        if(val==3 || val==2){
-            sendSX(bus,9,0);
-            sxWizardSessionId = 0;
-        }
+        sendSX(bus,9,sxWizardSessionId); usleep(8000); sendSX(bus,15,1); usleep(15000); sendSX(bus,10,val); usleep(120000); sendSX(bus,10,0); usleep(25000);
+        if(val==3 || val==2){ sendSX(bus,9,0); sxWizardSessionId = 0; }
         appendLog(msg);
     }
     void wizardMove(int bus, int addrA, int addrB, int servo, int step, int move, const QString &msg){
-        wizardPrime(bus, addrA, addrB, servo, step);
-        sendSX(bus,13,move);
-        usleep(120000);
-        sendSX(bus,13,0);
-        usleep(25000);
+        if(useSerialWizard()){
+            if(step==1) sendSerialWizardChar('1', "step"); else if(step==2) sendSerialWizardChar('2', "step"); else if(step==5) sendSerialWizardChar('5', "step");
+            sendSerialWizardChar(move==1?'-':(move==2?'+':'0'), "move");
+            appendLog(msg + " [via SERIAL]");
+            return;
+        }
+        wizardPrime(bus, addrA, addrB, servo, step); sendSX(bus,13,move); usleep(120000); sendSX(bus,13,0); usleep(25000);
         appendLog(msg);
-        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6")
-                  .arg(bus?"SX1":"SX0").arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
+        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6").arg(bus?"SX1":"SX0").arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
     }
     void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
-        wizardPrime(bus, addrA, addrB, servo, 5);
-        sendSX(bus,14,store);
-        usleep(120000);
-        sendSX(bus,14,0);
-        usleep(25000);
-        appendLog(msg);
+        if(useSerialWizard()){
+            sendSerialWizardChar(store==1?'l':'r', "store");
+            appendLog(msg + " [via SERIAL]");
+            return;
+        }
+        wizardPrime(bus, addrA, addrB, servo, 5); sendSX(bus,14,store); usleep(120000); sendSX(bus,14,0); usleep(25000); appendLog(msg);
     }
     void sendVisualWizardMove(int servo, int move){
         if(sxWizardSessionId==0){
@@ -1139,6 +1150,7 @@ private:
     QGroupBox* visualServoBoxes[16]{};
     QSpinBox *visualAddrA{}, *visualAddrB{}, *visualLimitSpin{};
     QCheckBox *visualBitOrder{};
+    QComboBox *progPathBox{};
     QPushButton *visualSetupRequestBtn{}, *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
     QLabel *visualProgStateLbl{};
     int servoArmPos[16]{};
