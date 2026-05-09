@@ -231,11 +231,12 @@ public:
         teleDisconnectBtn->setEnabled(false);
         teleStatusLbl = new QLabel("telemetry offline");
         fwStatusLbl = new QLabel("FW: unbekannt");
+        ackModeLbl = new QLabel("ACK-Modus: STRICT");
         tCfgL->addWidget(new QLabel("Port:")); tCfgL->addWidget(telePortEdit);
         tCfgL->addWidget(new QLabel("Baud:")); tCfgL->addWidget(teleBaudBox);
         tCfgL->addWidget(teleConnectBtn); tCfgL->addWidget(teleDisconnectBtn);
         tCfgL->addWidget(teleReqHelloBtn); tCfgL->addWidget(teleReqCfgBtn); tCfgL->addWidget(ackCfgFallbackBox);
-        tCfgL->addWidget(teleStatusLbl); tCfgL->addWidget(fwStatusLbl);
+        tCfgL->addWidget(teleStatusLbl); tCfgL->addWidget(fwStatusLbl); tCfgL->addWidget(ackModeLbl);
         root->addWidget(tCfg);
 
         auto *tabs = new QTabWidget;
@@ -515,6 +516,11 @@ public:
         connect(teleDisconnectBtn,&QPushButton::clicked,this,&MainWin::doTeleDisconnect);
         connect(teleReqHelloBtn,&QPushButton::clicked,this,[this](){ if(teleFd>=0){ ::write(teleFd,"t\n",2); appendLog("TEL TX: t"); } });
         connect(teleReqCfgBtn,&QPushButton::clicked,this,[this](){ if(teleFd>=0){ ::write(teleFd,"c\n",2); appendLog("TEL TX: c"); } });
+        connect(ackCfgFallbackBox, &QCheckBox::toggled, this, [this](bool on){
+            ackModeLbl->setText(on ? "ACK-Modus: NOTBETRIEB (CFG-Fallback)" : "ACK-Modus: STRICT");
+            ackModeLbl->setStyleSheet(on ? "QLabel { color: #c97a00; font-weight: bold; }" : "QLabel { color: #0a8a0a; font-weight: bold; }");
+        });
+        ackModeLbl->setStyleSheet("QLabel { color: #0a8a0a; font-weight: bold; }");
         connect(sendBtn,&QPushButton::clicked,this,&MainWin::sendValue);
         connect(quick0Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(0); sendValue(); });
         connect(quick1Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(1); sendValue(); });
@@ -1128,7 +1134,7 @@ private:
     QSpinBox *progAddrA{}, *progAddrB{}, *progServoIdx{};
     QComboBox *progStep{};
     QPushButton *progOnBtn{}, *progOffBtn{}, *progStartBtn{}, *progSaveBtn{}, *progAbortBtn{}, *progCommitAllBtn{}, *progMoveMinusBtn{}, *progMovePlusBtn{}, *progMidBtn{}, *progStoreLBtn{}, *progStoreRBtn{};
-    QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{}, *teleStatusLbl{}, *fwStatusLbl{};
+    QLabel *statusLbl{}, *infoLbl{}, *progStatusLbl{}, *teleStatusLbl{}, *fwStatusLbl{}, *ackModeLbl{};
     ServoArmWidget* servoArmWidgets[16]{};
     QGroupBox* visualServoBoxes[16]{};
     QSpinBox *visualAddrA{}, *visualAddrB{}, *visualLimitSpin{};
