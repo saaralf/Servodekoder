@@ -765,6 +765,10 @@ private slots:
     }
 
     void sendValue(){
+        if(useSerialWizard() && visualSetupStarted){
+            appendLog("WARN: SX Senden blockiert: Serial-Wizard aktiv (erst Setup Ende/Abort)");
+            return;
+        }
         if(fd<0){ appendLog("Senden fehlgeschlagen: offline"); return; }
         if(confirmBox->isChecked()){
             auto r = QMessageBox::question(this, "Senden", "Wert wirklich auf SX-Bus senden?");
