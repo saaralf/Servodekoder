@@ -703,15 +703,20 @@ private slots:
         bool okB0 = wr2(fd, 0xFE, 0xB0); usleep(10000);   // Start mit Bus 0 selektiert
         if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
 
-        bool seenData = false;
-        for(int i=0; i<30 && !seenData; ++i){
+        int rxCount = 0;
+        for(int i=0; i<40; ++i){
             uint8_t b=0;
             int r = ::read(fd, &b, 1);
-            if(r==1) seenData = true;
+            if(r==1) rxCount++;
             else usleep(10000);
         }
-        if(!seenData){
-            appendLog("WARN: kein sofortiger SX-Datenverkehr erkannt. Verbinde trotzdem (Port/BUS bitte prüfen).");
+        if(rxCount < 4){
+            statusLbl->setText("connect failed: kein SX-Bus erkannt");
+            appendLog(QString("Connect abgebrochen: kein SX-Bus-Datenverkehr erkannt (rx=%1)").arg(rxCount));
+            ::close(fd); fd=-1;
+            connectBtn->setEnabled(true); disconnectBtn->setEnabled(false);
+            connectBtn->setStyleSheet("");
+            return;
         }
 
         rtbsBus1 = false;
