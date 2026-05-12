@@ -1122,8 +1122,11 @@ private:
         int a = visualAddrA ? visualAddrA->value() : 1;
         int b = visualAddrB ? visualAddrB->value() : 0;
         bool bit1Left = visualBitOrder ? visualBitOrder->isChecked() : true;
+        bool serialWizardActive = useSerialWizard() && visualSetupStarted;
         for(int s=0; s<16; ++s){
             if(!visualServoBoxes[s]) continue;
+            bool tileEnabled = visualSetupStarted || (ackVisualState[s] == "pending");
+            visualServoBoxes[s]->setEnabled(tileEnabled);
             int bit = (s % 8) + 1;
             int shown = bit1Left ? bit : (9-bit);
             int adr = (s < 8) ? a : b;
@@ -1136,6 +1139,10 @@ private:
             if(moveQueue[s] != 0) qTag = QString(" | Q:%1").arg(moveQueue[s]);
             visualServoBoxes[s]->setTitle(QString("S%1 | Adr %2 | Bit %3%4%5").arg(s+1).arg(adr).arg(shown).arg(ackTag).arg(qTag));
         }
+        if(sendBtn) sendBtn->setEnabled(!serialWizardActive);
+        if(quick0Btn) quick0Btn->setEnabled(!serialWizardActive);
+        if(quick1Btn) quick1Btn->setEnabled(!serialWizardActive);
+        if(quick255Btn) quick255Btn->setEnabled(!serialWizardActive);
     }
 
     QComboBox *ifaceBox{}, *busBox{};
