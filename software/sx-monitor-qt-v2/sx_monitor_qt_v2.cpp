@@ -620,6 +620,7 @@ private:
         if(useSerialWizard()){
             if(step==1) sendSerialWizardChar('1', "step"); else if(step==2) sendSerialWizardChar('2', "step"); else if(step==5) sendSerialWizardChar('5', "step");
             sendSerialWizardChar(move==1?'-':(move==2?'+':'0'), "move");
+            usleep(160000); // Serial-Wizard: kurze Ruhezeit, damit ACK/Statuszeilen nicht mit Folgekommandos kollidieren
             appendLog(msg + " [via SERIAL]");
             return;
         }
@@ -646,7 +647,7 @@ private:
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
                    QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
         setAckPending(servo, "move", 1);
-        if(teleFd>=0 && !cfgImportInProgress){
+        if(teleFd>=0 && !cfgImportInProgress && !useSerialWizard()){
             moveAutoCfgCounter++;
             if((moveAutoCfgCounter % 4) == 0 || moveQueue[servo]==0){
                 usleep(100000);
