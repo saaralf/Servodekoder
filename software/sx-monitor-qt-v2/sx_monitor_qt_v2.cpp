@@ -420,6 +420,7 @@ public:
 
         for(int s=0; s<16; ++s){
             servoArmPos[s] = 0;
+            armLiveValid[s] = false;
             auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
             visualServoBoxes[s] = box;
             auto *bl = new QVBoxLayout(box);
@@ -933,6 +934,7 @@ private slots:
                     visualSetupArmed = false;
                     if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_MOVE)");
                     servoArmPos[s] = rel;
+                    armLiveValid[s] = true;
                     updateServoArmLabel(s);
                     setAckOk(s, "move");
                 }
@@ -955,6 +957,7 @@ private slots:
                     if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: AKTIV (ACK_SETUP_STATE)");
                     if(line.contains("action=mid")){
                         servoArmPos[s] = 0;
+                        armLiveValid[s] = true;
                         updateServoArmLabel(s);
                         setAckOk(s, "move");
                     } else if(line.contains("action=select")){
@@ -996,9 +999,11 @@ private slots:
                 int relMax = m.captured(4).toInt();
                 int divLeft = m.captured(5).toInt();
                 if(s>=0 && s<16){
-                    int mid = (relMin + relMax) / 2;
-                    servoArmPos[s] = mid;
-                    updateServoArmLabel(s);
+                    if(!armLiveValid[s]){
+                        int mid = (relMin + relMax) / 2;
+                        servoArmPos[s] = mid;
+                        updateServoArmLabel(s);
+                    }
                     if(servoTable){
                         servoTable->item(s,1)->setText(QString::number(zero));
                         servoTable->item(s,2)->setText(QString::number(relMin + 90));
@@ -1154,6 +1159,7 @@ private:
     QPushButton *visualSetupRequestBtn{}, *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
     QLabel *visualProgStateLbl{};
     int servoArmPos[16]{};
+    bool armLiveValid[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
     QTextEdit *logView{};
