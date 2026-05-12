@@ -107,6 +107,25 @@ static QString autodetectArduinoPort(){
     return "/dev/ttyUSB0";
 }
 
+static QString displayPortWithHint(const QString &path){
+    QFileInfo fi(path);
+    if(path.startsWith("/dev/serial/by-id/") && fi.exists()){
+        QString real = fi.symLinkTarget();
+        if(!real.isEmpty()) return QString("%1 (%2)").arg(real, path);
+    }
+    return path;
+}
+
+static QString extractActualPort(const QString &display){
+    int p1 = display.indexOf('(');
+    int p2 = display.lastIndexOf(')');
+    if(p1>0 && p2>p1){
+        QString inner = display.mid(p1+1, p2-p1-1).trimmed();
+        if(inner.startsWith("/dev/")) return inner;
+    }
+    return display.section(' ',0,0).trimmed();
+}
+
 static QString bits8(int v, bool bit1Left){
     QString s;
     if(bit1Left){ // optisch: Bit1..Bit8 von links nach rechts
@@ -198,7 +217,8 @@ public:
         auto *cfgL = new QHBoxLayout(cfg);
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
         busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
-        portEdit = new QLineEdit(autodetectSelectrixPort());
+        const QString sxAuto = autodetectSelectrixPort();
+        portEdit = new QLineEdit(displayPortWithHint(sxAuto));
         baudBox = new QComboBox;
         baudBox->addItems({"9600","19200","38400","57600","115200"});
         baudBox->setCurrentText("57600");
@@ -694,8 +714,9 @@ private:
 private slots:
     void doConnect(){
         doDisconnect();
-        fd = open(portEdit->text().toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
-        if(fd<0){ statusLbl->setText("open failed"); return; }
+        const QString sxPortActual = extractActualPort(portEdit->text());
+        fd = open(sxPortActual.toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
+        if(fd<0){ statusLbl->setText("open failed"); QMessageBox::warning(this, "SX Connect", QString("Port konnte nicht geöffnet werden:\n%1").arg(sxPortActual)); return; }
         int baud = baudBox->currentText().toInt();
         if(!set_serial(fd, baud)){ statusLbl->setText("serial cfg failed"); ::close(fd); fd=-1; return; }
 
@@ -713,6 +734,7 @@ private slots:
         if(rxCount < 4){
             statusLbl->setText("connect failed: kein SX-Bus erkannt");
             appendLog(QString("Connect abgebrochen: kein SX-Bus-Datenverkehr erkannt (rx=%1)").arg(rxCount));
+            QMessageBox::warning(this, "SX Connect", QString("Kein SX-Bus erkannt.\nPort: %1\nEmpfangene Bytes im Handshake: %2").arg(sxPortActual).arg(rxCount));
             ::close(fd); fd=-1;
             connectBtn->setEnabled(true); disconnectBtn->setEnabled(false);
             connectBtn->setStyleSheet("");
