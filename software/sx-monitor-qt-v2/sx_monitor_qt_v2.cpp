@@ -716,7 +716,13 @@ private slots:
         doDisconnect();
         const QString sxPortActual = extractActualPort(portEdit->text());
         fd = open(sxPortActual.toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
-        if(fd<0){ statusLbl->setText("open failed"); QMessageBox::warning(this, "SX Connect", QString("Port konnte nicht geöffnet werden:\n%1").arg(sxPortActual)); return; }
+        if(fd<0){
+            statusLbl->setText("open failed");
+            QString shown = displayPortWithHint(sxPortActual);
+            appendLog(QString("Connect fehlgeschlagen: Port konnte nicht geöffnet werden (%1)").arg(shown));
+            QMessageBox::warning(this, "SX Connect", QString("Port konnte nicht geöffnet werden:\n%1").arg(shown));
+            return;
+        }
         int baud = baudBox->currentText().toInt();
         if(!set_serial(fd, baud)){ statusLbl->setText("serial cfg failed"); ::close(fd); fd=-1; return; }
 
@@ -733,8 +739,9 @@ private slots:
         }
         if(rxCount < 4){
             statusLbl->setText("connect failed: kein SX-Bus erkannt");
-            appendLog(QString("Connect abgebrochen: kein SX-Bus-Datenverkehr erkannt (rx=%1)").arg(rxCount));
-            QMessageBox::warning(this, "SX Connect", QString("Kein SX-Bus erkannt.\nPort: %1\nEmpfangene Bytes im Handshake: %2").arg(sxPortActual).arg(rxCount));
+            QString shown = displayPortWithHint(sxPortActual);
+            appendLog(QString("Connect abgebrochen: kein SX-Bus-Datenverkehr erkannt auf %1 (rx=%2)").arg(shown).arg(rxCount));
+            QMessageBox::warning(this, "SX Connect", QString("Kein SX-Bus erkannt.\nPort: %1\nEmpfangene Bytes im Handshake: %2").arg(shown).arg(rxCount));
             ::close(fd); fd=-1;
             connectBtn->setEnabled(true); disconnectBtn->setEnabled(false);
             connectBtn->setStyleSheet("");
