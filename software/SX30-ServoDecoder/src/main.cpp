@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09m";
+const char FW_VERSION[] = "2026-05-09n";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -769,6 +769,18 @@ void loop() {
   processPendingServoStep();
 
   uint8_t track = sx.getTrackBit();
+
+  // Selectrix-Regel: bei Gleis EIN darf Prog-LED nicht aktiv bleiben.
+  if (track) {
+    if (programming) finishModuleProgramming();
+    if (setupMode) {
+      setupMode = false;
+      setupBySxWizard = false;
+      sxActiveSessionId = 0;
+      sxLockedServo = -1;
+    }
+    digitalWrite(PROGLED, LOW);
+  }
 
   if (programming) {
     if (track || keypressed()) {
