@@ -719,8 +719,9 @@ private slots:
         if(fd<0){
             statusLbl->setText("open failed");
             QString shown = displayPortWithHint(sxPortActual);
-            appendLog(QString("Connect fehlgeschlagen: Port konnte nicht geöffnet werden (%1)").arg(shown));
-            QMessageBox::warning(this, "SX Connect", QString("Port konnte nicht geöffnet werden:\n%1").arg(shown));
+            QString entered = portEdit ? portEdit->text().trimmed() : sxPortActual;
+            appendLog(QString("Connect fehlgeschlagen: Port konnte nicht geöffnet werden (eingabe=%1 | intern=%2)").arg(entered, shown));
+            QMessageBox::warning(this, "SX Connect", QString("Port konnte nicht geöffnet werden:\nEingabe: %1\nIntern:  %2").arg(entered, shown));
             return;
         }
         int baud = baudBox->currentText().toInt();
