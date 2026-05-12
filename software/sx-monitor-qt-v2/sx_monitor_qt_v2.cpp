@@ -600,10 +600,27 @@ private:
     }
     void wizardPulseK10(int bus, int val, const QString &msg){
         if(useSerialWizard()){
-            if(val==1){ sxWizardSessionId = 1; sendSerialWizardChar('s', "start"); }
-            else if(val==3) sendSerialWizardChar('w', "save-end");
-            else if(val==2) sendSerialWizardChar('x', "abort");
+            if(val==1){
+                if(visualSetupStarted){
+                    appendLog("WARN: Setup START ignoriert (Serial-Wizard bereits aktiv)");
+                    return;
+                }
+                sxWizardSessionId = 1;
+                visualSetupStarted = true;
+                sendSerialWizardChar('s', "start");
+            } else if(val==3){
+                sendSerialWizardChar('w', "save-end");
+                visualSetupStarted = false;
+                visualSetupArmed = false;
+                for(int i=0;i<16;++i) moveQueue[i]=0;
+            } else if(val==2){
+                sendSerialWizardChar('x', "abort");
+                visualSetupStarted = false;
+                visualSetupArmed = false;
+                for(int i=0;i<16;++i) moveQueue[i]=0;
+            }
             if(val==3 || val==2) sxWizardSessionId=0;
+            updateVisualTitles();
             appendLog(msg + " [via SERIAL]");
             return;
         }
@@ -1143,6 +1160,9 @@ private:
         if(quick0Btn) quick0Btn->setEnabled(!serialWizardActive);
         if(quick1Btn) quick1Btn->setEnabled(!serialWizardActive);
         if(quick255Btn) quick255Btn->setEnabled(!serialWizardActive);
+        if(visualSetupRequestBtn) visualSetupRequestBtn->setEnabled(!visualSetupStarted);
+        if(visualSetupSaveBtn) visualSetupSaveBtn->setEnabled(visualSetupStarted);
+        if(visualSetupAbortBtn) visualSetupAbortBtn->setEnabled(visualSetupStarted);
     }
 
     QComboBox *ifaceBox{}, *busBox{};
