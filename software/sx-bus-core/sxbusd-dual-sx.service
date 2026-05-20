@@ -1,0 +1,12 @@
+[Unit]
+Description=SX Bus Daemon Dual Backend (SX)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/programme/selectrix/Servodekoder/software/sx-bus-core/sx_bus_daemon_dual /dev/serial/by-id/usb-FTDI_FT232R_USB_UART_BG02SG7M-if00-port0 19200 /tmp/sxbusd_sx.sock sx
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=SX Bus Daemon Dual Backend (RMX)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/programme/selectrix/Servodekoder/software/sx-bus-core/sx_bus_daemon_dual /dev/serial/by-id/usb-rautenhaus_digital_RMX950USB-if00-port0 57600 /tmp/sxbusd_rmx.sock rmx
+Restart=always
+RestartSec=1
+
+[Install]
+WantedBy=default.target
