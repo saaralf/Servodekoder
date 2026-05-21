@@ -221,8 +221,9 @@ public:
         auto *cfg = new QGroupBox("Interface / Zentrale (nach SX1-Doku)");
         auto *cfgL = new QHBoxLayout(cfg);
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
+        backendBox = new QComboBox; backendBox->addItems({"SX","RMX"});
         busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
-        portEdit = new QLineEdit("daemon:///run/user/1000/sxbusd.sock");
+        portEdit = new QLineEdit("daemon:///tmp/sxbusd_sx.sock");
         baudBox = new QComboBox;
         baudBox->addItems({"9600","19200","38400","57600","115200"});
         baudBox->setCurrentText("57600");
@@ -232,6 +233,7 @@ public:
         disconnectBtn = new QPushButton("Disconnect"); disconnectBtn->setEnabled(false);
         statusLbl = new QLabel("offline");
         cfgL->addWidget(new QLabel("Interface:")); cfgL->addWidget(ifaceBox);
+        cfgL->addWidget(new QLabel("Backend:")); cfgL->addWidget(backendBox);
         cfgL->addWidget(new QLabel("Busse:")); cfgL->addWidget(busBox);
         cfgL->addWidget(new QLabel("Port:")); cfgL->addWidget(portEdit);
         cfgL->addWidget(new QLabel("Baud:")); cfgL->addWidget(baudBox);
@@ -555,6 +557,11 @@ public:
         connect(timer,&QTimer::timeout,this,&MainWin::pollSerial);
         connect(connectBtn,&QPushButton::clicked,this,&MainWin::doConnect);
         connect(disconnectBtn,&QPushButton::clicked,this,&MainWin::doDisconnect);
+        connect(backendBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){
+            const bool isRmx = backendBox && backendBox->currentText()=="RMX";
+            portEdit->setText(isRmx ? "daemon:///tmp/sxbusd_rmx.sock" : "daemon:///tmp/sxbusd_sx.sock");
+            if(baudBox) baudBox->setCurrentText(isRmx ? "57600" : "19200");
+        });
         connect(teleConnectBtn,&QPushButton::clicked,this,&MainWin::doTeleConnect);
         connect(teleDisconnectBtn,&QPushButton::clicked,this,&MainWin::doTeleDisconnect);
         connect(teleReqHelloBtn,&QPushButton::clicked,this,[this](){ if(teleFd>=0){ ::write(teleFd,"t\n",2); appendLog("TEL TX: t"); } });
@@ -785,11 +792,11 @@ private slots:
             return;
         }
 
+        const bool isRmxBackend = backendBox && backendBox->currentText()=="RMX";
         rtbsBus1 = false;
         visualSetupStarted = false;
         pending=-1;
-        // Für SLX850AD+SLX825 (SX0-only) Monitor nach Connect standardmäßig auf beide Busse,
-        // damit empfangene SX0-Änderungen (z.B. ADR20) sofort sichtbar sind.
+        // Für den ersten Schritt bleiben die Buslabels gleich; wir zeigen weiterhin beide Spalten.
         busBox->setCurrentText("SX0+SX1");
         rxWarmupUntilMs = uptime.elapsed() + 1200;
         logWarmupUntilMs = uptime.elapsed() + 2200;
@@ -830,10 +837,13 @@ private slots:
         };
 
         timer->start(25);
+        // GET_TRACK im Daemon wird beim Connect bereits gesendet; hier sofort einmal pollen,
+        // damit RMX-Trackstatus (AN/AUS) direkt in der UI erscheint.
+        for(int i=0;i<8;++i){ runtime.poll(); usleep(3000); }
         statusLbl->setText("online");
         connectBtn->setEnabled(false); disconnectBtn->setEnabled(true);
         connectBtn->setStyleSheet("QPushButton { background:#1f7a1f; color:white; font-weight:600; }");
-        appendLog("Connect ok, SX-Bridge aktiv. Bus-Monitor auf SX0+SX1 gesetzt (SX0-Änderungen sofort sichtbar).");
+        appendLog(QString("Connect ok, Backend=%1, Daemon=%2").arg(isRmxBackend?"RMX":"SX", sxPortActual));
     }
 
     void doDisconnect(){
@@ -1430,7 +1440,7 @@ private:
         if(visualSetupAbortBtn) visualSetupAbortBtn->setEnabled(visualSetupStarted);
     }
 
-    QComboBox *ifaceBox{}, *busBox{};
+    QComboBox *ifaceBox{}, *backendBox{}, *busBox{};
     QCheckBox *bitOrderBox{};
     QLineEdit *portEdit{};
     QComboBox *baudBox{};
