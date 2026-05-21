@@ -15,19 +15,17 @@
 #include <unistd.h>
 
 #define MAX_CLIENTS 16
-#define SOCK_PATH_DEFAULT "/tmp/sxbusd2.sock"
+#define SOCK_PATH_DEFAULT "/tmp/sxbusd.sock"
 
 static volatile sig_atomic_t g_run = 1;
 static int clients[MAX_CLIENTS];
 static sx_bus_ctx* g_ctx = NULL;
 static int g_last_track = -1;
 static int g_suppress_broadcast = 0;
-static int g_quiet_mode = 0; // 0: broadcast all SX0 FRAMEs + TRACK
 static int g_track_candidate = -1;
 static int g_track_candidate_count = 0;
 static long long g_track_last_commit_ms = 0;
 static long long g_last_track_poll_ms = 0;
-static long long g_last_auto126_ms = 0;
 
 static void on_sig(int s){ (void)s; g_run = 0; }
 
@@ -56,11 +54,6 @@ static int sx_write_direct(int bus, int adr, int val){
     return wr2(g_ctx->fd, cmd, data);
 }
 
-static int sx_force_auto126_bit7(void){
-    // In this setup we enforce adr126 bit7=1
-    return sx_write_direct(0, 126, 0x80);
-}
-
 static int sx_read_byte_timeout(int fd, int timeout_ms){
     unsigned char b = 0;
     int loops = (timeout_ms > 0) ? timeout_ms : 1;
@@ -76,48 +69,25 @@ static int sx_read_byte_timeout(int fd, int timeout_ms){
 static int sx_read_adr_data_sx0(int adr_expect, int* out_data){
     if(!g_ctx || g_ctx->fd < 0 || !out_data) return -1;
 
-    /* Rautenhaus read request: send ONLY address byte (bit7=0). */
+    /* Rautenhaus standard read: send ONLY address byte (bit7=0),
+       interface replies with (addr_with_busbit, data). */
     unsigned char rd = (unsigned char)(adr_expect & 0x7F);
     if(write_full(g_ctx->fd, &rd, 1) != 0) return -1;
 
-    /*
-      Interfaces seen in the wild return either:
-      A) addr+data pair (a,d)
-      B) data-only single byte
-      We accept both to stay compatible.
-    */
-
-    int first = sx_read_byte_timeout(g_ctx->fd, 20);
-    if(first < 0) return -1;
-
-    /* Try pair mode first: if next byte arrives quickly, validate address. */
-    int second = sx_read_byte_timeout(g_ctx->fd, 4);
-    if(second >= 0){
-        int bus = (first & 0x80) ? 1 : 0;
-        int adr = (first & 0x7F);
+    /* Expect pair (a,d). Accept up to a short window because stream bytes may interleave. */
+    for(int i=0;i<24;++i){
+        int a = sx_read_byte_timeout(g_ctx->fd, 6);
+        if(a < 0) continue;
+        int d = sx_read_byte_timeout(g_ctx->fd, 6);
+        if(d < 0) continue;
+        int bus = (a & 0x80) ? 1 : 0;
+        int adr = (a & 0x7F);
         if(bus == 0 && adr == adr_expect){
-            *out_data = second & 0xFF;
+            *out_data = d & 0xFF;
             return 0;
         }
-        /* Pair did not match requested address; keep scanning a short window. */
-        for(int i=0;i<12;++i){
-            int a = sx_read_byte_timeout(g_ctx->fd, 4);
-            if(a < 0) continue;
-            int d = sx_read_byte_timeout(g_ctx->fd, 4);
-            if(d < 0) continue;
-            int b = (a & 0x80) ? 1 : 0;
-            int ad = (a & 0x7F);
-            if(b == 0 && ad == adr_expect){
-                *out_data = d & 0xFF;
-                return 0;
-            }
-        }
-        return -1;
     }
-
-    /* No second byte => treat first as data-only reply. */
-    *out_data = first & 0xFF;
-    return 0;
+    return -1;
 }
 
 static int sx_read_track_adr127(int* out_track, int* out_raw){
@@ -157,12 +127,6 @@ static void clients_broadcast(const char* msg){
         ssize_t wr = write(clients[i], msg, n);
         if(wr < 0){ close(clients[i]); clients[i] = -1; }
     }
-}
-
-static int should_broadcast_frame(int bus, int adr){
-    if(!g_quiet_mode) return 1;
-    if(bus != 0) return 0;
-    return (adr == 19 || adr == 20);
 }
 
 static void sx_drain_rx(int ms){
@@ -238,7 +202,7 @@ static void handle_client_cmd(int idx){
         int last_errno = 0;
         g_suppress_broadcast = 1;
         sx_drain_rx(8);
-        if(bus == 0 && adr >= 0 && adr < 128){
+        if(bus == 0 && adr >= 0 && adr < 112){
             for(int attempt=0; attempt<10; ++attempt){
                 rc = sx_read_adr_data_sx0(adr, &d);
                 if(rc == 0) break;
@@ -247,10 +211,8 @@ static void handle_client_cmd(int idx){
             }
         }
         if(rc == 0){
-            if(adr >= 0 && adr < 112){
-                g_last_sx0[adr] = d & 0xFF;
-                g_have_sx0[adr] = 1;
-            }
+            g_last_sx0[adr] = d & 0xFF;
+            g_have_sx0[adr] = 1;
             char fline[64];
             snprintf(fline, sizeof(fline), "FRAME %d %d %d\n", bus, adr, d & 0xFF);
             (void)write(clients[idx], fline, strlen(fline));
@@ -326,29 +288,55 @@ static void periodic_track_poll(void){
         }
     }
 
-    // Live-poll für alle SX0-Adressen:
-    // Einige Setups liefern keinen zuverlässigen spontanen Stream.
-    // Daher alle 112 Adressen zyklisch lesen und nur Änderungen broadcasten.
-    static long long last_hot_poll_ms = 0;
+    // Priorisierte ADRs für Live-QA (explizit oft gelesen)
+    const int hotAdrs[] = {19, 20};
+    static long long last_hot_dbg_ms = 0;
     long long now_hot = now_ms();
-    if(now_hot - last_hot_poll_ms >= 77){
-        for(int adr=0; adr<112; ++adr){
-            int d = -1;
-            if(sx_read_adr_data_sx0(adr, &d) != 0) continue;
-            const int v = d & 0xFF;
-            if(!g_have_sx0[adr]){
-                g_last_sx0[adr] = v;
-                g_have_sx0[adr] = 1;
-            } else if(g_last_sx0[adr] != v){
-                int old = g_last_sx0[adr];
-                g_last_sx0[adr] = v;
-                char line[64];
-                snprintf(line, sizeof(line), "FRAME %d %d %d\n", 0, adr, v);
-                if(should_broadcast_frame(0, adr)) clients_broadcast(line);
-                fprintf(stderr, "sxbusd ADR poll adr=%d old=%d new=%d\n", adr, old, v);
+    int dbg_hot = (now_hot - last_hot_dbg_ms) >= 500;
+    for(size_t i=0; i<sizeof(hotAdrs)/sizeof(hotAdrs[0]); ++i){
+        int adr = hotAdrs[i];
+        int d = -1;
+        if(sx_read_adr_data_sx0(adr, &d) != 0){
+            if(dbg_hot){
+                fprintf(stderr, "sxbusd HOT dbg adr=%d read=ERR\n", adr);
             }
+            continue;
         }
-        last_hot_poll_ms = now_hot;
+        const int v = d & 0xFF;
+        if(dbg_hot){
+            fprintf(stderr, "sxbusd HOT dbg adr=%d val=%d\n", adr, v);
+        }
+        if(!g_have_sx0[adr] || g_last_sx0[adr] != v){
+            int old = g_have_sx0[adr] ? g_last_sx0[adr] : -1;
+            g_last_sx0[adr] = v;
+            g_have_sx0[adr] = 1;
+            char line[64];
+            snprintf(line, sizeof(line), "FRAME %d %d %d\n", 0, adr, v);
+            clients_broadcast(line);
+            fprintf(stderr, "sxbusd HOT poll adr=%d old=%d new=%d\n", adr, old, v);
+        }
+    }
+    if(dbg_hot) last_hot_dbg_ms = now_hot;
+
+    // Hintergrund-Round-Robin für restliche SX0-Adressen
+    static int rrAdr = 0;
+    for(int i=0; i<8; ++i){
+        int adr = rrAdr;
+        rrAdr = (rrAdr + 1) % 112;
+        if(adr == 19 || adr == 20) continue;
+
+        int d = -1;
+        if(sx_read_adr_data_sx0(adr, &d) != 0) continue;
+        const int v = d & 0xFF;
+        if(!g_have_sx0[adr] || g_last_sx0[adr] != v){
+            int old = g_have_sx0[adr] ? g_last_sx0[adr] : -1;
+            g_last_sx0[adr] = v;
+            g_have_sx0[adr] = 1;
+            char line[64];
+            snprintf(line, sizeof(line), "FRAME %d %d %d\n", 0, adr, v);
+            clients_broadcast(line);
+            fprintf(stderr, "sxbusd ADR poll adr=%d old=%d new=%d\n", adr, old, v);
+        }
     }
 }
 
@@ -368,7 +356,7 @@ static void on_frame(int bus, int adr, int data, void* u){
 
     char line[64];
     snprintf(line, sizeof(line), "FRAME %d %d %d\n", bus, adr, data);
-    if(should_broadcast_frame(bus, adr)) clients_broadcast(line);
+    clients_broadcast(line);
 }
 
 static void on_track(int track, void* u){
@@ -419,11 +407,6 @@ int main(int argc, char** argv){
 
     if(sx_enable_feedback(&ctx) != 0){ perror("sx_enable_feedback"); sx_close(&ctx); return 1; }
     g_ctx = &ctx;
-    if(sx_force_auto126_bit7() == 0){
-        fprintf(stderr, "sxbusd INFO auto126 init set 0x80\n");
-    } else {
-        fprintf(stderr, "sxbusd WARN auto126 init set failed errno=%d\n", errno);
-    }
 
     int srv = make_server(sock);
     if(srv < 0){ perror("socket_server"); sx_close(&ctx); return 1; }
@@ -439,11 +422,6 @@ int main(int argc, char** argv){
         int r = sx_poll(&ctx, on_frame, on_track, NULL);
         if(r < 0){ perror("sx_poll"); break; }
         periodic_track_poll();
-        long long now = now_ms();
-        if((now - g_last_auto126_ms) >= 1000){
-            (void)sx_force_auto126_bit7();
-            g_last_auto126_ms = now;
-        }
         usleep(5000);
     }
 

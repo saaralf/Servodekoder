@@ -11,6 +11,10 @@ Stand: in Arbeit (Servo-Bildansicht V2 + Telemetrie-Sync)
 - [x] End-to-End Testplan (Serial + SX-Monitor) dokumentiert und praktisch verifiziert
 - [x] SX-Wizard robust gemacht (Session/K15/K1-Guards, Servo-Lock, Store-Plausibilisierung)
 - [x] Qt-ACK/Telemetrie stabilisiert (gedrosselte Move-Verifikation, CFG-Import-Schutz, vollständige CFG-Prüfung)
+- [x] QT-Rückmeldung für lokalen Prog-Tastendruck ergänzt (`PROG_STATUS active=...`, V2-Statuslabel)
+- [x] Qt-V2-Protokoll wird zusätzlich in Dateien geschrieben (`~/SXServo-Logs/sxservo_qt_v2_latest.log` + Zeitstempel-Log)
+- [x] V2 Gleisindikator gehärtet (SX0/SX1 Umschaltung zeigt sofort bekannten Trackstatus; unbekannt wird als `?` dargestellt)
+- [x] `Progmodus anfordern` blockiert bei `Track=1` jetzt hart (Warnung + kein K10-Start)
 - [ ] Optional: Servo-Relax (PWM nach Stellvorgang aus) gegen Haltestrom
 
 ## Implementiert
@@ -41,7 +45,7 @@ GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 8) Im Betrieb über Fahrdaten 0/1 die gespeicherten Endlagen anfahren.
 
 ## Nächste Schritte
-1. QT-Rückmeldung für lokalen Prog-Tastendruck ergänzen (klarer Statuskanal/ACK: "Prog aktiv/inaktiv").
+1. Hardwaretest: lokalen Prog-Taster drücken und in Qt V2 `PROG_STATUS active=1/0` + Statuslabel prüfen.
 2. Optional Servo-Relax als schaltbare Option ergänzen.
 3. Optional kurze Inbetriebnahme-Notiz ins README übernehmen.
 4. Feldtest: mehrfache Langläufe mit korrekter SX-Adresse (K1=20) zur finalen Abnahme (keine Fremd-Servo-Zuckungen, stabile ACKs).
@@ -111,6 +115,8 @@ GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 - 2026-05-07: Qt V2 ACK-Pending/Timeout pro Servo ergänzt: nach V2 MOVE/STORE wird `ACK:pending` am Tile angezeigt; bei `ACK_SETUP_MOVE`/`ACK_SETUP_STATE action=mid`/`ACK_SETUP_STORE` auf `ACK:ok`; ohne passendes ACK nach 900ms auf `ACK:timeout` inkl. Logeintrag.
 - 2026-05-08: V2-Klickpfad für besseres Bediengefühl synchronisiert: GUI bewegt Armposition nicht mehr „blind", sondern wartet auf Arduino-ACK; `++/--` senden jetzt echte Mehrfach-Schritte (bis zu 10 Einzelimpulse, limitiert durch V2-Limit), damit sichtbare/akustische Bewegung zum Klick passt.
 - 2026-05-08: V2-Queue/BUSY/Timeout verfeinert: pro Servo Move-Queue mit ACK-gesteuerter Schritt-für-Schritt-Abarbeitung ergänzt (auch bei schnellem Klicken), dynamischer ACK-Timeout pro Servo eingebaut, Queue-Status im Tile-Titel sichtbar (`Q:+/-n`).
+- 2026-05-12: Lokaler Prog-Taster bekommt eigene Telemetrie `PROG_STATUS active=1/0 source=local_button track=... led=...`; Qt V2 wertet diese Zeile aus und zeigt Progstatus/D13 im V2-Statuslabel an. Nach Fehlerdiagnose ergänzt: Bei `PROG_STATUS active=1 source=local_button` sendet Qt im Serial-Wizard automatisch `s`, damit der Decoder wirklich in den Servo-Setup-Wizard wechselt; Firmware `2026-05-12b` beendet dabei den klassischen Modul-Programmierstatus (`programming=false`). Qt-Build erfolgreich; Firmware-Build lokal nicht möglich, weil PlatformIO/pio in dieser Shell fehlt.
+- 2026-05-12: Qt V2 schreibt das Änderungsprotokoll zusätzlich dauerhaft nach `~/SXServo-Logs/sxservo_qt_v2_latest.log` (immer aktueller Lauf, überschrieben) und in ein Zeitstempel-Log `~/SXServo-Logs/sxservo_qt_v2_YYYYMMDD_HHMMSS.log`. Headless-Test hat Datei erzeugt und Start-/Logpfad-Zeilen geschrieben.
 
 
 1) Ergebnis:  *  Executing task: platformio device monitor 

@@ -1,0 +1,13 @@
+[Unit]
+Description=SX Bus Daemon (SLX825 SX0 stream profile)
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/opt/programme/selectrix/Servodekoder/software/sx-bus-core/sx_bus_daemon /dev/ttyUSB0 19200 /tmp/sxbusd.sock slx825_sx0_stream
+Restart=always
+RestartSec=1
+User=michael
+
+[Install]
+WantedBy=multi-user.target

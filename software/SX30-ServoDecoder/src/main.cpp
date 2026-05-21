@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-09n";
+const char FW_VERSION[] = "2026-05-14a";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -108,7 +108,8 @@ uint8_t sxCmdZeroStableCount = 0;
 int8_t sxLockedServo = -1;
 
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
-const uint16_t SERVO_SWITCH_INTERVAL_MS = 35;
+// Groessere Staffelzeit reduziert Stromspitzen bei Mehrfach-Umschaltung.
+const uint16_t SERVO_SWITCH_INTERVAL_MS = 180;
 uint8_t pendingDataA = 0;
 uint8_t pendingDataB = 0;
 uint8_t pendingMaskA = 0;
@@ -407,6 +408,11 @@ bool setupValidateAll() {
 }
 
 void startInitialSetup(bool fromSxWizard = false) {
+  // Servo-Setup und klassischer Modul-Programmiermodus (lokale Prog-Taste)
+  // duerfen nicht parallel aktiv bleiben. Wenn Qt nach lokaler Prog-Taste
+  // automatisch 's' sendet, wird damit bewusst in den Servo-Setup-Wizard
+  // gewechselt.
+  programming = false;
   setupMode = true;
   setupBySxWizard = fromSxWizard;
   digitalWrite(PROGLED, HIGH); // D13: Einstellmodus aktiv
@@ -501,6 +507,7 @@ void startModuleProgramming() {
   programming = true;
   keyPressTime = millis();
   digitalWrite(PROGLED, HIGH);
+  Serial.println(F("PROG_STATUS active=1 source=local_button track=0 led=1"));
 
   // aktuelle Werte auf Programmierkanäle legen
   while (sx.set(SX_CHAN_ADDR_A, cfg.sxAddrA) != 0) delay(10);
@@ -535,6 +542,9 @@ void finishModuleProgramming() {
 
   saveConfig();
   digitalWrite(PROGLED, LOW);
+  Serial.print(F("PROG_STATUS active=0 source=local_button track="));
+  Serial.print(sx.getTrackBit());
+  Serial.println(F(" led=0"));
 }
 
 // ---------- SX ISR ----------
@@ -726,6 +736,22 @@ void loop() {
   processSetupSxWizard();
 
   if (setupMode) {
+    // Während aktivem Servo-Setup muss ein erneuter lokaler Tastendruck den Modus
+    // sauber beenden können (D13 aus, Track wieder EIN, Statuszeile senden).
+    if (keypressed()) {
+      setupMode = false;
+      setupBySxWizard = false;
+      sxActiveSessionId = 0;
+      sxLockedServo = -1;
+      digitalWrite(PROGLED, LOW);
+      sx.setTrackBit(1);
+      Serial.print(F("PROG_STATUS active=0 source=local_button track="));
+      Serial.print(sx.getTrackBit());
+      Serial.println(F(" led=0"));
+      Serial.println(F("Setup beendet per lokaler Prog-Taste."));
+      return;
+    }
+
     // Serial-Befehle immer erlauben (auch wenn Setup per SX-Wizard gestartet wurde),
     // damit 'x'/'w'/+/- lokal zuverlässig funktionieren.
     processSetupSerial();
