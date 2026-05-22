@@ -66,4 +66,9 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
     });
+    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this](BackendKind b,int bus,int adr,int val){
+        log->append(QString("RX %1 b%2 a%3 v%4")
+            .arg(b==BackendKind::SX?"SX":"RMX")
+            .arg(bus).arg(adr).arg(val));
+    });
 }

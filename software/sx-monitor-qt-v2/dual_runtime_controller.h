@@ -14,6 +14,7 @@ public:
     bool send(BackendKind b, int bus, int adr, int val);
 signals:
     void connectedChanged(BackendKind b, bool on);
+    void frameReceived(BackendKind b, int bus, int adr, int val);
     void trackUpdated(BackendKind b, int track);
     void status(BackendKind b, const QString& text);
 private:

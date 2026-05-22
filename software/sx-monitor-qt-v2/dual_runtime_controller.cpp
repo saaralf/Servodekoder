@@ -1,6 +1,8 @@
 #include "dual_runtime_controller.h"
 
 DualRuntimeController::DualRuntimeController(QObject* parent): QObject(parent){
+    sx.onFrame = [this](int bus,int adr,int val){ emit frameReceived(BackendKind::SX,bus,adr,val); };
+    rmx.onFrame = [this](int bus,int adr,int val){ emit frameReceived(BackendKind::RMX,bus,adr,val); };
     sx.onTrack = [this](int t){ emit trackUpdated(BackendKind::SX, t); };
     rmx.onTrack = [this](int t){ emit trackUpdated(BackendKind::RMX, t); };
     sx.onStatus = [this](const std::string& s){ emit status(BackendKind::SX, QString::fromStdString(s)); };
