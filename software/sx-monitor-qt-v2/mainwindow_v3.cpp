@@ -12,6 +12,8 @@
 #include <QVBoxLayout>
 #include <QTextEdit>
 #include <QWidget>
+#include <array>
+#include <memory>
 
 static QString bits8(int v){
     QString s; s.reserve(8);
@@ -54,6 +56,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* rmxTab = new QWidget;
     auto* sxTabL = new QVBoxLayout(sxTab);
     auto* rmxTabL = new QVBoxLayout(rmxTab);
+    auto* sxBusSel = new QComboBox; sxBusSel->addItems({"SX0","SX1"});
+    auto* rmxBusSel = new QComboBox; rmxBusSel->addItems({"RMX0","RMX1"});
     auto* sxTable = new QTableWidget(38,9);
     auto* rmxTable = new QTableWidget(38,9);
     sxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
@@ -102,8 +106,28 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     );
     sxTabL->addWidget(sxTable);
     rmxTabL->addWidget(rmxTable);
+    sxTabL->insertWidget(0, sxBusSel);
+    rmxTabL->insertWidget(0, rmxBusSel);
     tabs->addTab(sxTab, "SX Monitor");
     tabs->addTab(rmxTab, "RMX Monitor");
+
+    auto sxVals = std::make_shared<std::array<std::array<int,112>,2>>();
+    auto rmxVals = std::make_shared<std::array<std::array<int,112>,2>>();
+    for(auto &b:*sxVals) b.fill(-1);
+    for(auto &b:*rmxVals) b.fill(-1);
+    auto repaintTable = [sxTable,rmxTable,sxBusSel,rmxBusSel,sxVals,rmxVals](BackendKind bk){
+        auto* t = (bk==BackendKind::SX)?sxTable:rmxTable;
+        int bus = (bk==BackendKind::SX)?sxBusSel->currentIndex():rmxBusSel->currentIndex();
+        auto& vals = (bk==BackendKind::SX)?*sxVals:*rmxVals;
+        for(int adr=0; adr<=111; ++adr){
+            int row=adr%38, blk=adr/38, base=blk*3;
+            int v=vals[bus][adr];
+            t->item(row,base+1)->setText(v<0?"-":QString::number(v));
+            t->item(row,base+2)->setText(v<0?"--------":bits8(v));
+        }
+    };
+    connect(sxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable](int){ repaintTable(BackendKind::SX); });
+    connect(rmxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable](int){ repaintTable(BackendKind::RMX); });
 
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
@@ -228,16 +252,20 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
     });
-    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable](BackendKind b,int bus,int adr,int val){
+    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel](BackendKind b,int bus,int adr,int val){
         if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
             .arg(bus).arg(adr).arg(val));
-        if(adr>=0 && adr<=111){
+        if(adr>=0 && adr<=111 && (bus==0 || bus==1)){
             QTableWidget* t = (b==BackendKind::SX)?sxTable:rmxTable;
+            auto vals = (b==BackendKind::SX)?sxVals:rmxVals;
+            (*vals)[bus][adr] = val;
             int row = adr % 38;
             int blk = adr / 38;
             int base = blk*3;
+            int selBus = (b==BackendKind::SX)?sxBusSel->currentIndex():rmxBusSel->currentIndex();
+            if(selBus != bus) return;
             QString nv = QString::number(val);
             if(t->item(row,base+1)->text() != nv){
                 t->item(row,base+0)->setBackground(QColor(255,245,170));
