@@ -6,6 +6,8 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QCheckBox>
+#include <QTabWidget>
+#include <QTableWidget>
 #include <QVBoxLayout>
 #include <QTextEdit>
 #include <QWidget>
@@ -40,6 +42,27 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* pRead127Btn = new QPushButton("Preset Read127");
     auto* rx126Only = new QCheckBox("RX nur 126/127");
     auto* clearLogBtn = new QPushButton("Log löschen");
+    auto* tabs = new QTabWidget;
+    auto* sxTab = new QWidget;
+    auto* rmxTab = new QWidget;
+    auto* sxTabL = new QVBoxLayout(sxTab);
+    auto* rmxTabL = new QVBoxLayout(rmxTab);
+    auto* sxTable = new QTableWidget(128,3);
+    auto* rmxTable = new QTableWidget(128,3);
+    sxTable->setHorizontalHeaderLabels({"Adr","SX0","SX1"});
+    rmxTable->setHorizontalHeaderLabels({"Adr","RMX0","RMX1"});
+    for(int a=0;a<128;++a){
+        sxTable->setItem(a,0,new QTableWidgetItem(QString::number(a)));
+        sxTable->setItem(a,1,new QTableWidgetItem("-"));
+        sxTable->setItem(a,2,new QTableWidgetItem("-"));
+        rmxTable->setItem(a,0,new QTableWidgetItem(QString::number(a)));
+        rmxTable->setItem(a,1,new QTableWidgetItem("-"));
+        rmxTable->setItem(a,2,new QTableWidgetItem("-"));
+    }
+    sxTabL->addWidget(sxTable);
+    rmxTabL->addWidget(rmxTable);
+    tabs->addTab(sxTab, "SX Monitor");
+    tabs->addTab(rmxTab, "RMX Monitor");
 
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
@@ -72,6 +95,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendBlock);
+    l->addWidget(tabs,1);
     l->addWidget(log,1);
 
     connect(sendBtn,&QPushButton::clicked,this,[this,beBox,busBox,adr,val]{
@@ -163,10 +187,14 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
     });
-    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only](BackendKind b,int bus,int adr,int val){
+    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable](BackendKind b,int bus,int adr,int val){
         if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
             .arg(bus).arg(adr).arg(val));
+        if(adr>=0 && adr<128 && (bus==0 || bus==1)){
+            QTableWidget* t = (b==BackendKind::SX)?sxTable:rmxTable;
+            t->item(adr,bus+1)->setText(QString::number(val));
+        }
     });
 }
