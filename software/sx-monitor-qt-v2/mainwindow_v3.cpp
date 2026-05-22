@@ -18,8 +18,12 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     rmxPanel = new ConnectionPanel("RMX", "daemon:///tmp/sxbusd_rmx.sock", 57600);
     log = new QTextEdit; log->setReadOnly(true);
 
+    auto* sendBlock = new QWidget;
+    auto* sendBlockL = new QVBoxLayout(sendBlock);
     auto* sendRow = new QWidget;
     auto* sendL = new QHBoxLayout(sendRow);
+    auto* opsRow = new QWidget;
+    auto* opsL = new QHBoxLayout(opsRow);
     auto* beBox = new QComboBox; beBox->addItems({"SX","RMX"});
     auto* busBox = new QComboBox; busBox->addItems({"0","1"});
     auto* adr = new QSpinBox; adr->setRange(0,127);
@@ -36,6 +40,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* pRead127Btn = new QPushButton("Preset Read127");
     auto* rx126Only = new QCheckBox("RX nur 126/127");
     auto* clearLogBtn = new QPushButton("Log löschen");
+
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
     sendL->addWidget(new QLabel("Bus")); sendL->addWidget(busBox);
@@ -43,19 +48,30 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sendL->addWidget(new QLabel("Wert")); sendL->addWidget(val);
     sendL->addWidget(sendBtn);
     sendL->addWidget(readBtn);
-    sendL->addWidget(autoBtn);
-    sendL->addWidget(autoWrBtn);
-    sendL->addWidget(sxWrBtn);
-    sendL->addWidget(rmxWrBtn);
-    sendL->addWidget(pSet128Btn);
-    sendL->addWidget(pSet0Btn);
-    sendL->addWidget(pRead126Btn);
-    sendL->addWidget(pRead127Btn);
-    sendL->addWidget(rx126Only);
-    sendL->addWidget(clearLogBtn);
+
+    opsL->addWidget(new QLabel("Auto:"));
+    opsL->addWidget(autoBtn);
+    opsL->addWidget(autoWrBtn);
+    opsL->addSpacing(8);
+    opsL->addWidget(new QLabel("Single:"));
+    opsL->addWidget(sxWrBtn);
+    opsL->addWidget(rmxWrBtn);
+    opsL->addSpacing(8);
+    opsL->addWidget(new QLabel("Preset:"));
+    opsL->addWidget(pSet128Btn);
+    opsL->addWidget(pSet0Btn);
+    opsL->addWidget(pRead126Btn);
+    opsL->addWidget(pRead127Btn);
+    opsL->addStretch(1);
+    opsL->addWidget(rx126Only);
+    opsL->addWidget(clearLogBtn);
+
+    sendBlockL->addWidget(sendRow);
+    sendBlockL->addWidget(opsRow);
+
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
-    l->addWidget(sendRow);
+    l->addWidget(sendBlock);
     l->addWidget(log,1);
 
     connect(sendBtn,&QPushButton::clicked,this,[this,beBox,busBox,adr,val]{
