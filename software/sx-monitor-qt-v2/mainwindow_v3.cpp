@@ -28,6 +28,12 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* readBtn = new QPushButton("Read Test");
     auto* autoBtn = new QPushButton("Auto Read 126/127");
     auto* autoWrBtn = new QPushButton("Auto Write+Read 126");
+    auto* sxWrBtn = new QPushButton("SX WR126");
+    auto* rmxWrBtn = new QPushButton("RMX WR126");
+    auto* pSet128Btn = new QPushButton("Preset A126=128");
+    auto* pSet0Btn = new QPushButton("Preset A126=0");
+    auto* pRead126Btn = new QPushButton("Preset Read126");
+    auto* pRead127Btn = new QPushButton("Preset Read127");
     auto* rx126Only = new QCheckBox("RX nur 126/127");
     auto* clearLogBtn = new QPushButton("Log löschen");
     sendL->addWidget(new QLabel("Send:"));
@@ -39,6 +45,12 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sendL->addWidget(readBtn);
     sendL->addWidget(autoBtn);
     sendL->addWidget(autoWrBtn);
+    sendL->addWidget(sxWrBtn);
+    sendL->addWidget(rmxWrBtn);
+    sendL->addWidget(pSet128Btn);
+    sendL->addWidget(pSet0Btn);
+    sendL->addWidget(pRead126Btn);
+    sendL->addWidget(pRead127Btn);
     sendL->addWidget(rx126Only);
     sendL->addWidget(clearLogBtn);
     l->addWidget(sxPanel);
@@ -93,6 +105,26 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 .arg(r0?"OK":"FAIL"));
         }
     });
+    connect(sxWrBtn,&QPushButton::clicked,this,[this]{
+        bool w1 = ctrl.send(BackendKind::SX, 0, 126, 128);
+        bool r1 = ctrl.readAdr(BackendKind::SX, 0, 126);
+        bool w0 = ctrl.send(BackendKind::SX, 0, 126, 0);
+        bool r0 = ctrl.readAdr(BackendKind::SX, 0, 126);
+        log->append(QString("SX WR126 set128=%1 read=%2 reset0=%3 read=%4")
+            .arg(w1?"OK":"FAIL").arg(r1?"OK":"FAIL").arg(w0?"OK":"FAIL").arg(r0?"OK":"FAIL"));
+    });
+    connect(rmxWrBtn,&QPushButton::clicked,this,[this]{
+        bool w1 = ctrl.send(BackendKind::RMX, 0, 126, 128);
+        bool r1 = ctrl.readAdr(BackendKind::RMX, 0, 126);
+        bool w0 = ctrl.send(BackendKind::RMX, 0, 126, 0);
+        bool r0 = ctrl.readAdr(BackendKind::RMX, 0, 126);
+        log->append(QString("RMX WR126 set128=%1 read=%2 reset0=%3 read=%4")
+            .arg(w1?"OK":"FAIL").arg(r1?"OK":"FAIL").arg(w0?"OK":"FAIL").arg(r0?"OK":"FAIL"));
+    });
+    connect(pSet128Btn,&QPushButton::clicked,this,[adr,val]{ adr->setValue(126); val->setValue(128); });
+    connect(pSet0Btn,&QPushButton::clicked,this,[adr,val]{ adr->setValue(126); val->setValue(0); });
+    connect(pRead126Btn,&QPushButton::clicked,this,[adr]{ adr->setValue(126); });
+    connect(pRead127Btn,&QPushButton::clicked,this,[adr]{ adr->setValue(127); });
     connect(clearLogBtn,&QPushButton::clicked,this,[this]{ log->clear(); });
 
     connect(sxPanel,&ConnectionPanel::connectRequested,this,[this](const QString& ep,int b){
