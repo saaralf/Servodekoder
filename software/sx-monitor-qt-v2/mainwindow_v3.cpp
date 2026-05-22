@@ -12,6 +12,8 @@
 #include <QVBoxLayout>
 #include <QTextEdit>
 #include <QWidget>
+#include <QGroupBox>
+#include <QGridLayout>
 #include <array>
 #include <memory>
 
@@ -55,9 +57,11 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* sxTab = new QWidget;
     auto* rmxTab = new QWidget;
     auto* servoTab = new QWidget;
+    auto* visualTab = new QWidget;
     auto* sxTabL = new QVBoxLayout(sxTab);
     auto* rmxTabL = new QVBoxLayout(rmxTab);
     auto* servoL = new QVBoxLayout(servoTab);
+    auto* visualL = new QVBoxLayout(visualTab);
     auto* sxBusSel = new QComboBox; sxBusSel->addItems({"SX0","SX1"});
     auto* rmxBusSel = new QComboBox; rmxBusSel->addItems({"RMX0","RMX1"});
     auto* sxTable = new QTableWidget(28,12);
@@ -159,6 +163,31 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     servoL->addWidget(servoTable);
     servoL->addWidget(new QLabel("Wizard: K10 Start/Save/Abort, K11 Servo, K12 Schritt, K13 Move, K14 L/R speichern"));
     tabs->addTab(servoTab, "Servo-Programmer");
+
+    auto* visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(5); visualAddrA->setFixedWidth(90);
+    auto* visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(6); visualAddrB->setFixedWidth(90);
+    auto* visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
+    auto* addrArow = new QHBoxLayout;
+    addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):")); addrArow->addWidget(visualAddrA);
+    addrArow->addSpacing(10); addrArow->addWidget(new QLabel("Adresse 2 (untere Reihe):")); addrArow->addWidget(visualAddrB);
+    addrArow->addSpacing(10); addrArow->addWidget(visualBitOrder); addrArow->addStretch(1);
+    visualL->addLayout(addrArow);
+
+    auto* grid = new QGridLayout;
+    for(int s=0; s<16; ++s){
+        int adr = (s<8) ? visualAddrA->value() : visualAddrB->value();
+        int bit = (s%8)+1;
+        int shown = visualBitOrder->isChecked() ? bit : (9-bit);
+        auto* box = new QGroupBox(QString("Servo %1").arg(s+1));
+        auto* bl = new QVBoxLayout(box);
+        auto* txt = new QLabel(QString("Adresse %1\nBit %2").arg(adr).arg(shown));
+        txt->setAlignment(Qt::AlignCenter);
+        txt->setStyleSheet("QLabel{background:#eef3ff; border:1px solid #c8d6ff; padding:8px; min-height:72px;}");
+        bl->addWidget(txt);
+        grid->addWidget(box, s/8, s%8);
+    }
+    visualL->addLayout(grid);
+    tabs->addTab(visualTab, "Servo-Bildansicht V2");
 
     auto sxVals = std::make_shared<std::array<std::array<int,112>,2>>();
     auto rmxVals = std::make_shared<std::array<std::array<int,112>,2>>();
