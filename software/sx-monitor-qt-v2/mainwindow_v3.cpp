@@ -14,6 +14,7 @@
 #include <QWidget>
 #include <QGroupBox>
 #include <QGridLayout>
+#include <QProgressBar>
 #include <vector>
 #include <array>
 #include <memory>
@@ -176,6 +177,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
 
     auto* grid = new QGridLayout;
     std::vector<QLabel*> visualInfo(16, nullptr);
+    std::vector<QProgressBar*> visualArm(16, nullptr);
     for(int s=0; s<16; ++s){
         int adr = (s<8) ? visualAddrA->value() : visualAddrB->value();
         int bit = (s%8)+1;
@@ -187,6 +189,12 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         txt->setAlignment(Qt::AlignCenter);
         txt->setStyleSheet("QLabel{background:#eef3ff; border:1px solid #c8d6ff; padding:8px; min-height:72px;}");
         bl->addWidget(txt);
+        auto* armBar = new QProgressBar;
+        armBar->setRange(0,180);
+        armBar->setValue(90);
+        armBar->setFormat("Winkel %v°");
+        visualArm[s] = armBar;
+        bl->addWidget(armBar);
         auto* actionRow = new QHBoxLayout;
         auto* bM = new QPushButton("M");
         auto* bG = new QPushButton("G");
@@ -387,7 +395,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
     });
-    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel](BackendKind b,int bus,int adr,int val){
+    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel,visualAddrA,visualAddrB,visualBitOrder,visualArm](BackendKind b,int bus,int adr,int val){
         if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
@@ -409,6 +417,18 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             }
             t->item(row,base+1)->setText(nv);
             t->item(row,base+2)->setText(bits8(val));
+
+            int adrA = visualAddrA->value();
+            int adrB = visualAddrB->value();
+            for(int s=0;s<16;++s){
+                int sa = (s<8)?adrA:adrB;
+                if(sa != adr) continue;
+                int bit = (s%8)+1;
+                int bitIdx = visualBitOrder->isChecked() ? (bit-1) : (8-bit);
+                int on = (val >> bitIdx) & 0x1;
+                int angle = on ? 130 : 50;
+                if(visualArm[s]) visualArm[s]->setValue(angle);
+            }
         }
     });
 
