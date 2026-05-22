@@ -29,6 +29,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* autoBtn = new QPushButton("Auto Read 126/127");
     auto* autoWrBtn = new QPushButton("Auto Write+Read 126");
     auto* rx126Only = new QCheckBox("RX nur 126/127");
+    auto* clearLogBtn = new QPushButton("Log löschen");
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
     sendL->addWidget(new QLabel("Bus")); sendL->addWidget(busBox);
@@ -39,6 +40,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sendL->addWidget(autoBtn);
     sendL->addWidget(autoWrBtn);
     sendL->addWidget(rx126Only);
+    sendL->addWidget(clearLogBtn);
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendRow);
@@ -91,6 +93,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 .arg(r0?"OK":"FAIL"));
         }
     });
+    connect(clearLogBtn,&QPushButton::clicked,this,[this]{ log->clear(); });
 
     connect(sxPanel,&ConnectionPanel::connectRequested,this,[this](const QString& ep,int b){
         bool ok = ctrl.connectBackend(BackendKind::SX, ep, b);
