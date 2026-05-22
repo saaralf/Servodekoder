@@ -5,6 +5,7 @@
 #include <QPushButton>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QCheckBox>
 #include <QVBoxLayout>
 #include <QTextEdit>
 #include <QWidget>
@@ -27,6 +28,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* readBtn = new QPushButton("Read Test");
     auto* autoBtn = new QPushButton("Auto Read 126/127");
     auto* autoWrBtn = new QPushButton("Auto Write+Read 126");
+    auto* rx126Only = new QCheckBox("RX nur 126/127");
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
     sendL->addWidget(new QLabel("Bus")); sendL->addWidget(busBox);
@@ -36,6 +38,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sendL->addWidget(readBtn);
     sendL->addWidget(autoBtn);
     sendL->addWidget(autoWrBtn);
+    sendL->addWidget(rx126Only);
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendRow);
@@ -109,7 +112,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
     });
-    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this](BackendKind b,int bus,int adr,int val){
+    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only](BackendKind b,int bus,int adr,int val){
+        if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
             .arg(bus).arg(adr).arg(val));
