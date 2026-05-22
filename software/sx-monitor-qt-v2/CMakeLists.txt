@@ -11,3 +11,14 @@ add_executable(sx_monitor_qt_v2
 )
 target_include_directories(sx_monitor_qt_v2 PRIVATE ../sx-bus-core)
 target_link_libraries(sx_monitor_qt_v2 PRIVATE Qt6::Widgets)
+
+add_executable(sx_monitor_qt_v3
+    main_v3.cpp
+    mainwindow_v3.cpp
+    connection_panel.cpp
+    dual_runtime_controller.cpp
+    sx_runtime.cpp
+    ../sx-bus-core/sx_bus_core.c
+)
+target_include_directories(sx_monitor_qt_v3 PRIVATE ../sx-bus-core)
+target_link_libraries(sx_monitor_qt_v3 PRIVATE Qt6::Widgets)
