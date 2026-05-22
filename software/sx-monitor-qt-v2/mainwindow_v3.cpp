@@ -58,40 +58,30 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* rmxTabL = new QVBoxLayout(rmxTab);
     auto* sxBusSel = new QComboBox; sxBusSel->addItems({"SX0","SX1"});
     auto* rmxBusSel = new QComboBox; rmxBusSel->addItems({"RMX0","RMX1"});
-    auto* sxTable = new QTableWidget(38,9);
-    auto* rmxTable = new QTableWidget(38,9);
-    sxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
-    rmxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
-    for(int row=0; row<38; ++row){
-        for(int blk=0; blk<3; ++blk){
-            int adr = blk*38 + row;
-            int base = blk*3;
-            if(adr<=111){
-                sxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
-                sxTable->setItem(row,base+1,new QTableWidgetItem("-"));
-                sxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
-                rmxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
-                rmxTable->setItem(row,base+1,new QTableWidgetItem("-"));
-                rmxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
-            } else {
-                sxTable->setItem(row,base+0,new QTableWidgetItem(""));
-                sxTable->setItem(row,base+1,new QTableWidgetItem(""));
-                sxTable->setItem(row,base+2,new QTableWidgetItem(""));
-                rmxTable->setItem(row,base+0,new QTableWidgetItem(""));
-                rmxTable->setItem(row,base+1,new QTableWidgetItem(""));
-                rmxTable->setItem(row,base+2,new QTableWidgetItem(""));
-            }
-        }
+    auto* sxTable = new QTableWidget(28,12);
+    auto* rmxTable = new QTableWidget(28,12);
+    sxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
+    rmxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
+    for(int adr=0; adr<112; ++adr){
+        int row = adr % 28;
+        int blk = adr / 28;
+        int base = blk * 3;
+        sxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
+        sxTable->setItem(row,base+1,new QTableWidgetItem("-"));
+        sxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
+        rmxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
+        rmxTable->setItem(row,base+1,new QTableWidgetItem("-"));
+        rmxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
     }
     for(auto* t : {sxTable, rmxTable}){
         t->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
         t->verticalHeader()->setVisible(false);
         t->setAlternatingRowColors(true);
         t->verticalHeader()->setDefaultSectionSize(22);
-        for(int blk=0; blk<3; ++blk){
+        for(int blk=0; blk<4; ++blk){
             int base=blk*3;
-            t->setColumnWidth(base+0, 44);
-            t->setColumnWidth(base+1, 54);
+            t->setColumnWidth(base+0, 42);
+            t->setColumnWidth(base+1, 48);
             t->setColumnWidth(base+2, 86);
         }
         t->setStyleSheet(
@@ -120,7 +110,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         int bus = (bk==BackendKind::SX)?sxBusSel->currentIndex():rmxBusSel->currentIndex();
         auto& vals = (bk==BackendKind::SX)?*sxVals:*rmxVals;
         for(int adr=0; adr<=111; ++adr){
-            int row=adr%38, blk=adr/38, base=blk*3;
+            int row=adr%28, blk=adr/28, base=blk*3;
             int v=vals[bus][adr];
             t->item(row,base+1)->setText(v<0?"-":QString::number(v));
             t->item(row,base+2)->setText(v<0?"--------":bits8(v));
@@ -261,8 +251,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             QTableWidget* t = (b==BackendKind::SX)?sxTable:rmxTable;
             auto vals = (b==BackendKind::SX)?sxVals:rmxVals;
             (*vals)[bus][adr] = val;
-            int row = adr % 38;
-            int blk = adr / 38;
+            int row = adr % 28;
+            int blk = adr / 28;
             int base = blk*3;
             int selBus = (b==BackendKind::SX)?sxBusSel->currentIndex():rmxBusSel->currentIndex();
             if(selBus != bus) return;
