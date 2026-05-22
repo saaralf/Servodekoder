@@ -214,52 +214,102 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     servoL->addWidget(new QLabel("Wizard: K10 Start/Save/Abort, K11 Servo, K12 Schritt, K13 Move, K14 L/R speichern"));
     tabs->addTab(servoTab, "Servo-Programmer");
 
-    auto* visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(5); visualAddrA->setFixedWidth(90);
-    auto* visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(6); visualAddrB->setFixedWidth(90);
+    auto* visualAddrA = new QSpinBox; visualAddrA->setRange(1,111); visualAddrA->setValue(progAddrA->value()); visualAddrA->setFixedWidth(90);
+    auto* visualAddrB = new QSpinBox; visualAddrB->setRange(0,111); visualAddrB->setValue(progAddrB->value()); visualAddrB->setFixedWidth(90);
     auto* visualBitOrder = new QCheckBox("Bits links->rechts (Bit1 links)"); visualBitOrder->setChecked(true);
+    auto* visualLimitSpin = new QSpinBox; visualLimitSpin->setRange(30,45); visualLimitSpin->setValue(40);
+
     auto* addrArow = new QHBoxLayout;
-    addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):")); addrArow->addWidget(visualAddrA);
-    addrArow->addSpacing(10); addrArow->addWidget(new QLabel("Adresse 2 (untere Reihe):")); addrArow->addWidget(visualAddrB);
-    addrArow->addSpacing(10); addrArow->addWidget(visualBitOrder); addrArow->addStretch(1);
+    addrArow->setContentsMargins(0,0,0,0);
+    addrArow->setSpacing(6);
+    addrArow->addWidget(new QLabel("Adresse 1 (obere Reihe):"));
+    addrArow->addWidget(visualAddrA);
+    addrArow->addSpacing(10);
+    addrArow->addWidget(visualBitOrder);
+    addrArow->addStretch(1);
     visualL->addLayout(addrArow);
 
     auto* grid = new QGridLayout;
+    grid->setHorizontalSpacing(4);
+    grid->setVerticalSpacing(4);
     std::vector<QLabel*> visualInfo(16, nullptr);
     std::vector<ServoArmWidget*> visualArm(16, nullptr);
+
+    auto mkHdr = [visualBitOrder,visualAddrA,visualAddrB](int servoIdx)->QLabel*{
+        int bit = (servoIdx % 8) + 1;
+        int shown = (visualBitOrder && visualBitOrder->isChecked()) ? bit : (9-bit);
+        int adr = (servoIdx < 8) ? visualAddrA->value() : visualAddrB->value();
+        auto *l = new QLabel(QString("Servo %1\nAdresse %2\nBit %3").arg(servoIdx+1).arg(adr).arg(shown));
+        l->setAlignment(Qt::AlignCenter);
+        return l;
+    };
+    for(int c=0;c<8;++c) grid->addWidget(mkHdr(c), 0, c);
+
+    auto *addrBline = new QWidget;
+    auto *addrBL = new QHBoxLayout(addrBline);
+    addrBL->setContentsMargins(0,0,0,0);
+    addrBL->setSpacing(6);
+    addrBL->addWidget(new QLabel("Adresse 2 (untere Reihe):"));
+    addrBL->addWidget(visualAddrB);
+    addrBL->addStretch(1);
+    grid->addWidget(addrBline, 2, 0, 1, 8);
+    for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 3, c);
+
+    auto *limitLine = new QWidget;
+    auto *limitL = new QHBoxLayout(limitLine);
+    limitL->setContentsMargins(0,0,0,0);
+    limitL->setSpacing(6);
+    limitL->addWidget(new QLabel("V2 Limit ±:"));
+    limitL->addWidget(visualLimitSpin);
+    limitL->addWidget(new QLabel("(nur GUI-Bedienlimit)"));
+    limitL->addStretch(1);
+    grid->addWidget(limitLine, 5, 0, 1, 8);
+
     for(int s=0; s<16; ++s){
-        int adr = (s<8) ? visualAddrA->value() : visualAddrB->value();
-        int bit = (s%8)+1;
-        int shown = visualBitOrder->isChecked() ? bit : (9-bit);
-        auto* box = new QGroupBox(QString("Servo %1").arg(s+1));
-        auto* bl = new QVBoxLayout(box);
-        auto* txt = new QLabel(QString("Adresse %1\nBit %2").arg(adr).arg(shown));
-        visualInfo[s] = txt;
-        txt->setAlignment(Qt::AlignCenter);
-        txt->setStyleSheet("QLabel{background:#eef3ff; border:1px solid #c8d6ff; padding:8px; min-height:72px;}");
-        bl->addWidget(txt);
-        auto* armW = new ServoArmWidget;
-        armW->setAngleDeg(0);
-        visualArm[s] = armW;
-        bl->addWidget(armW);
-        auto* actionRow = new QHBoxLayout;
-        auto* bM = new QPushButton("M");
-        auto* bG = new QPushButton("G");
-        auto* bA = new QPushButton("A");
-        auto* bS = new QPushButton("S");
-        actionRow->addWidget(bM); actionRow->addWidget(bG); actionRow->addWidget(bA); actionRow->addWidget(bS);
-        bl->addLayout(actionRow);
-        connect(bM,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok1=ctrl.send(b,bus,11,s); bool ok2=ctrl.send(b,bus,13,3); log->append(QString("V2 S%1 Mitte -> %2/%3").arg(s+1).arg(ok1?"OK":"FAIL").arg(ok2?"OK":"FAIL")); });
-        connect(bG,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok1=ctrl.send(b,bus,11,s); bool ok2=ctrl.send(b,bus,14,1); log->append(QString("V2 S%1 Gerade -> %2/%3").arg(s+1).arg(ok1?"OK":"FAIL").arg(ok2?"OK":"FAIL")); });
-        connect(bA,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok1=ctrl.send(b,bus,11,s); bool ok2=ctrl.send(b,bus,14,2); log->append(QString("V2 S%1 Abzweig -> %2/%3").arg(s+1).arg(ok1?"OK":"FAIL").arg(ok2?"OK":"FAIL")); });
-        connect(bS,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok=ctrl.send(b,bus,11,s); log->append(QString("V2 S%1 Select -> %2").arg(s+1).arg(ok?"OK":"FAIL")); });
-        grid->addWidget(box, s/8, s%8);
+        auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
+        auto *bl = new QVBoxLayout(box);
+        auto *arm = new ServoArmWidget();
+        visualArm[s] = arm;
+        bl->addWidget(arm, 1);
+
+        auto *row1 = new QHBoxLayout;
+        auto *bMinus2 = new QPushButton("--");
+        auto *bMinus = new QPushButton("-");
+        auto *bMid = new QPushButton("Mitte");
+        auto *bPlus = new QPushButton("+");
+        auto *bPlus2 = new QPushButton("++");
+        bMinus2->setFixedWidth(34); bPlus2->setFixedWidth(34);
+        bMinus->setFixedWidth(30);  bPlus->setFixedWidth(30);
+        row1->addWidget(bMinus2); row1->addWidget(bMinus); row1->addWidget(bMid); row1->addWidget(bPlus); row1->addWidget(bPlus2);
+        bl->addLayout(row1);
+
+        auto *row2 = new QHBoxLayout;
+        auto *bL = new QPushButton("Links speichern");
+        auto *bR = new QPushButton("Rechts speichern");
+        row2->addWidget(bL); row2->addWidget(bR);
+        bl->addLayout(row2);
+
+        auto sendWizard = [this,beBox,busBox](int adr, int val){ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); return ctrl.send(b,bus,adr,val); };
+        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,10); sendWizard(13,1); log->append(QString("V2 S%1 --").arg(s+1)); });
+        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); log->append(QString("V2 S%1 -").arg(s+1)); });
+        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); log->append(QString("V2 S%1 +").arg(s+1)); });
+        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,10); sendWizard(13,2); log->append(QString("V2 S%1 ++").arg(s+1)); });
+        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(13,3); log->append(QString("V2 S%1 Mitte").arg(s+1)); });
+        connect(bL,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,1); log->append(QString("V2 S%1 Links speichern").arg(s+1)); });
+        connect(bR,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,2); log->append(QString("V2 S%1 Rechts speichern").arg(s+1)); });
+
+        int c = s%8;
+        int r = (s<8) ? 1 : 4;
+        grid->addWidget(box, r, c);
     }
+
     auto refreshVisual = [visualInfo,visualAddrA,visualAddrB,visualBitOrder](){
         for(int s=0;s<16;++s){
-            int adr=(s<8)?visualAddrA->value():visualAddrB->value();
+            if(!visualInfo[s]) continue;
             int bit=(s%8)+1;
             int shown=visualBitOrder->isChecked()?bit:(9-bit);
-            if(visualInfo[s]) visualInfo[s]->setText(QString("Adresse %1\nBit %2").arg(adr).arg(shown));
+            int adr=(s<8)?visualAddrA->value():visualAddrB->value();
+            visualInfo[s]->setText(QString("Servo %1\nAdresse %2\nBit %3").arg(s+1).arg(adr).arg(shown));
         }
     };
     connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [refreshVisual](int){ refreshVisual(); });
