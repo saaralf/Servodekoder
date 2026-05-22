@@ -54,8 +54,10 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* tabs = new QTabWidget;
     auto* sxTab = new QWidget;
     auto* rmxTab = new QWidget;
+    auto* servoTab = new QWidget;
     auto* sxTabL = new QVBoxLayout(sxTab);
     auto* rmxTabL = new QVBoxLayout(rmxTab);
+    auto* servoL = new QVBoxLayout(servoTab);
     auto* sxBusSel = new QComboBox; sxBusSel->addItems({"SX0","SX1"});
     auto* rmxBusSel = new QComboBox; rmxBusSel->addItems({"RMX0","RMX1"});
     auto* sxTable = new QTableWidget(28,12);
@@ -110,6 +112,54 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     tabs->addTab(sxTab, "SX Monitor");
     tabs->addTab(rmxTab, "RMX Monitor");
 
+    auto* r1 = new QHBoxLayout;
+    auto* progAddrA = new QSpinBox; progAddrA->setRange(1,111);
+    auto* progAddrB = new QSpinBox; progAddrB->setRange(0,111);
+    auto* progOnBtn = new QPushButton("Prog EIN (Track=0)");
+    auto* progOffBtn = new QPushButton("Prog AUS (Track=1)");
+    r1->addWidget(new QLabel("AddrA")); r1->addWidget(progAddrA);
+    r1->addWidget(new QLabel("AddrB")); r1->addWidget(progAddrB);
+    r1->addWidget(progOnBtn); r1->addWidget(progOffBtn);
+    servoL->addLayout(r1);
+
+    auto* r2 = new QHBoxLayout;
+    auto* progServoIdx = new QSpinBox; progServoIdx->setRange(1,16);
+    auto* progStep = new QComboBox; progStep->addItems({"1","2","5","10","20"}); progStep->setCurrentText("5");
+    auto* progMoveMinusBtn = new QPushButton("-");
+    auto* progMovePlusBtn = new QPushButton("+");
+    auto* progMidBtn = new QPushButton("Mitte");
+    auto* progStoreLBtn = new QPushButton("L speichern");
+    auto* progStoreRBtn = new QPushButton("R speichern");
+    auto* progStartBtn = new QPushButton("Setup START (K10=1)");
+    auto* progSaveBtn = new QPushButton("Setup SAVE+ENDE (K10=3)");
+    auto* progAbortBtn = new QPushButton("Setup ABBRUCH (K10=2)");
+    r2->addWidget(new QLabel("Servo")); r2->addWidget(progServoIdx);
+    r2->addWidget(new QLabel("Schritt")); r2->addWidget(progStep);
+    r2->addWidget(progMoveMinusBtn); r2->addWidget(progMovePlusBtn); r2->addWidget(progMidBtn);
+    r2->addWidget(progStoreLBtn); r2->addWidget(progStoreRBtn);
+    r2->addWidget(progStartBtn); r2->addWidget(progSaveBtn); r2->addWidget(progAbortBtn);
+    servoL->addLayout(r2);
+
+    auto* servoTable = new QTableWidget(16,6);
+    servoTable->setHorizontalHeaderLabels({"Servo","zero","relMin(v+90)","relMax(v+90)","divLeft","Action"});
+    servoTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+    servoTable->setColumnWidth(0,52); servoTable->setColumnWidth(1,64); servoTable->setColumnWidth(2,92);
+    servoTable->setColumnWidth(3,92); servoTable->setColumnWidth(4,64); servoTable->setColumnWidth(5,280);
+    for(int s=0;s<16;++s){
+        servoTable->setItem(s,0,new QTableWidgetItem(QString::number(s+1)));
+        servoTable->setItem(s,1,new QTableWidgetItem("90"));
+        servoTable->setItem(s,2,new QTableWidgetItem("50"));
+        servoTable->setItem(s,3,new QTableWidgetItem("130"));
+        servoTable->setItem(s,4,new QTableWidgetItem("1"));
+        auto *w = new QWidget; auto *hl = new QHBoxLayout(w); hl->setContentsMargins(0,0,0,0);
+        auto *bMid=new QPushButton("Mitte"); auto *bG=new QPushButton("Gerade"); auto *bA=new QPushButton("Abzweig"); auto *bC=new QPushButton("Commit");
+        hl->addWidget(bMid); hl->addWidget(bG); hl->addWidget(bA); hl->addWidget(bC);
+        servoTable->setCellWidget(s,5,w);
+    }
+    servoL->addWidget(servoTable);
+    servoL->addWidget(new QLabel("Wizard: K10 Start/Save/Abort, K11 Servo, K12 Schritt, K13 Move, K14 L/R speichern"));
+    tabs->addTab(servoTab, "Servo-Programmer");
+
     auto sxVals = std::make_shared<std::array<std::array<int,112>,2>>();
     auto rmxVals = std::make_shared<std::array<std::array<int,112>,2>>();
     for(auto &b:*sxVals) b.fill(-1);
@@ -127,6 +177,35 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     };
     connect(sxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable](int){ repaintTable(BackendKind::SX); });
     connect(rmxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable](int){ repaintTable(BackendKind::RMX); });
+
+    auto sendWizard = [this,beBox,busBox](int adr, int val){
+        BackendKind b = (beBox->currentText()=="SX") ? BackendKind::SX : BackendKind::RMX;
+        int bus = busBox->currentText().toInt();
+        return ctrl.send(b, bus, adr, val);
+    };
+    connect(progOnBtn,&QPushButton::clicked,this,[this,sendWizard]{
+        bool ok = sendWizard(127,0); log->append(QString("PROG EIN -> %1").arg(ok?"OK":"FAIL"));
+    });
+    connect(progOffBtn,&QPushButton::clicked,this,[this,sendWizard]{
+        bool ok = sendWizard(127,128); log->append(QString("PROG AUS -> %1").arg(ok?"OK":"FAIL"));
+    });
+    connect(progStartBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,1); log->append(QString("K10 START -> %1").arg(ok?"OK":"FAIL")); });
+    connect(progSaveBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,3); log->append(QString("K10 SAVE -> %1").arg(ok?"OK":"FAIL")); });
+    connect(progAbortBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,2); log->append(QString("K10 ABORT -> %1").arg(ok?"OK":"FAIL")); });
+    connect(progMidBtn,&QPushButton::clicked,this,[this,sendWizard,progServoIdx]{
+        bool a=sendWizard(11,progServoIdx->value()-1); bool b=sendWizard(13,3);
+        log->append(QString("Mitte S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
+    });
+    connect(progStoreLBtn,&QPushButton::clicked,this,[this,sendWizard,progServoIdx]{
+        bool a=sendWizard(11,progServoIdx->value()-1); bool b=sendWizard(14,1);
+        log->append(QString("L speichern S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
+    });
+    connect(progStoreRBtn,&QPushButton::clicked,this,[this,sendWizard,progServoIdx]{
+        bool a=sendWizard(11,progServoIdx->value()-1); bool b=sendWizard(14,2);
+        log->append(QString("R speichern S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
+    });
+    connect(progMoveMinusBtn,&QPushButton::clicked,this,[this,sendWizard,progStep]{ bool a=sendWizard(12,progStep->currentText().toInt()); bool b=sendWizard(13,1); log->append(QString("MOVE - -> %1/%2").arg(a?"OK":"FAIL").arg(b?"OK":"FAIL")); });
+    connect(progMovePlusBtn,&QPushButton::clicked,this,[this,sendWizard,progStep]{ bool a=sendWizard(12,progStep->currentText().toInt()); bool b=sendWizard(13,2); log->append(QString("MOVE + -> %1/%2").arg(a?"OK":"FAIL").arg(b?"OK":"FAIL")); });
 
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
