@@ -222,7 +222,7 @@ public:
         auto *cfgL = new QHBoxLayout(cfg);
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
         backendBox = new QComboBox; backendBox->addItems({"SX","RMX"});
-        busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
+        busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"}); // Labels werden backend-abhängig aktualisiert
         portEdit = new QLineEdit("daemon:///tmp/sxbusd_sx.sock");
         baudBox = new QComboBox;
         baudBox->addItems({"9600","19200","38400","57600","115200"});
@@ -362,10 +362,10 @@ public:
             auto *bMid=new QPushButton("Mitte"); auto *bG=new QPushButton("Gerade"); auto *bA=new QPushButton("Abzweig"); auto *bC=new QPushButton("Commit");
             hl->addWidget(bMid); hl->addWidget(bG); hl->addWidget(bA); hl->addWidget(bC);
             servoTable->setCellWidget(s,5,w);
-            connect(bMid,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,13,3); appendLog(QString("SETUP Mitte S%1").arg(s+1)); });
-            connect(bG,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,14,1); appendLog(QString("SETUP L speichern S%1").arg(s+1)); });
-            connect(bA,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,14,2); appendLog(QString("SETUP R speichern S%1").arg(s+1)); });
-            connect(bC,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); appendLog(QString("SETUP Servo selektiert S%1").arg(s+1)); });
+            connect(bMid,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); sendSX(bus,13,3); appendLog(QString("SETUP Mitte S%1").arg(s+1)); });
+            connect(bG,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); sendSX(bus,14,1); appendLog(QString("SETUP L speichern S%1").arg(s+1)); });
+            connect(bA,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); sendSX(bus,14,2); appendLog(QString("SETUP R speichern S%1").arg(s+1)); });
+            connect(bC,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); appendLog(QString("SETUP Servo selektiert S%1").arg(s+1)); });
         }
         progL->addWidget(servoTable);
 
@@ -561,6 +561,17 @@ public:
             const bool isRmx = backendBox && backendBox->currentText()=="RMX";
             portEdit->setText(isRmx ? "daemon:///tmp/sxbusd_rmx.sock" : "daemon:///tmp/sxbusd_sx.sock");
             if(baudBox) baudBox->setCurrentText(isRmx ? "57600" : "19200");
+            const QString keep = busBox ? busBox->currentText() : QString();
+            if(busBox){
+                busBox->blockSignals(true);
+                busBox->clear();
+                if(isRmx) busBox->addItems({"RMX0","RMX1","RMX0+RMX1"});
+                else busBox->addItems({"SX0","SX1","SX0+SX1"});
+                if(keep.endsWith("1")) busBox->setCurrentIndex(1);
+                else if(keep.contains('+')) busBox->setCurrentIndex(2);
+                else busBox->setCurrentIndex(0);
+                busBox->blockSignals(false);
+            }
         });
         connect(teleConnectBtn,&QPushButton::clicked,this,&MainWin::doTeleConnect);
         connect(teleDisconnectBtn,&QPushButton::clicked,this,&MainWin::doTeleDisconnect);
@@ -601,53 +612,71 @@ public:
             for(int i=0;i<16;++i) moveQueue[i]=0;
             wizardLockedServo = -1;
             int bus=effectiveWizardBus();
-            if(sendBusBox && sendBusBox->currentText()=="SX1" && bus==0) appendLog("INFO: SX1 gewählt, aber kein SX1-RX erkannt -> Wizard-Fallback auf SX0");
+            if(sendBusBox && sendBusBox->currentText().endsWith("1") && bus==0) appendLog(QString("INFO: %1 gewählt, Wizard nutzt %2 (Fallback)").arg(sendBusBox->currentText(), busLabel(bus)));
             wizardPulseK10(bus,1,"V2 SETUP START (K10=1 Impuls)");
             if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: angefordert (K10=1 gesendet), warte auf ACK_SETUP_*");
             appendLog("V2: Setup angefordert. Lokal Taste ist optional, primär startet K10=1 den Wizard.");
             updateVisualTitles();
         });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); updateVisualTitles(); });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); updateVisualTitles(); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); updateVisualTitles(); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); updateVisualTitles(); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
-            // Gleis/Track ist fachlich an SX0 gebunden (unabhängig vom Wizard-Bus)
+            // Gleis/Track wird auf Bus0 geführt (SX0 bzw. RMX0), unabhängig vom Wizard-Bus
             const int trackBus = 0;
             sendSX(trackBus, 1, progAddrA->value());
             sendSX(trackBus, 2, progAddrB->value());
             sendSX(trackBus, 0, 0); // TrackBit 0 (über Adr0)
-            appendLog("PROG EIN (SX0): AddrA/AddrB gesetzt, Track=0");
+            appendLog(QString("PROG EIN (%1): AddrA/AddrB gesetzt, Track=0").arg(busLabel(trackBus)));
         });
         connect(progOffBtn,&QPushButton::clicked,this,[this](){
-            // Gleis/Track ist fachlich an SX0 gebunden (unabhängig vom Wizard-Bus)
+            // Gleis/Track wird auf Bus0 geführt (SX0 bzw. RMX0), unabhängig vom Wizard-Bus
             const int trackBus = 0;
             sendSX(trackBus, 0, 1); // TrackBit 1
-            appendLog("PROG AUS (SX0): Track=1");
+            appendLog(QString("PROG AUS (%1): Track=1").arg(busLabel(trackBus)));
         });
-        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,1,"SETUP START (K10=1 Impuls)"); });
-        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"SETUP SAVE+ENDE (K10=3 Impuls)"); });
-        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"SETUP ABBRUCH (K10=2 Impuls)"); });
-        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 1, "SETUP MOVE - (Impuls)"); });
-        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 2, "SETUP MOVE + (Impuls)"); });
-        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 3, "SETUP MITTE (Impuls)"); });
-        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 1, "SETUP L speichern (Impuls)"); });
-        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 2, "SETUP R speichern (Impuls)"); });
-        connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
+        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,1,"SETUP START (K10=1 Impuls)"); });
+        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,3,"SETUP SAVE+ENDE (K10=3 Impuls)"); });
+        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,2,"SETUP ABBRUCH (K10=2 Impuls)"); });
+        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 1, "SETUP MOVE - (Impuls)"); });
+        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 2, "SETUP MOVE + (Impuls)"); });
+        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 3, "SETUP MITTE (Impuls)"); });
+        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 1, "SETUP L speichern (Impuls)"); });
+        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 2, "SETUP R speichern (Impuls)"); });
+        connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
     }
     ~MainWin(){ doDisconnect(); }
 
 private:
-    int effectiveWizardBus() const {
+    bool backendIsRmx() const {
+        return backendBox && backendBox->currentText()=="RMX";
+    }
+
+    QString busLabel(int bus) const {
+        const bool rmx = backendIsRmx();
+        return QString("%1%2").arg(rmx ? "RMX" : "SX").arg(bus==1?1:0);
+    }
+
+    QString busBothLabel() const {
+        return backendIsRmx() ? "RMX0+RMX1" : "SX0+SX1";
+    }
+
+    int selectedCommandBus() const {
         if(!sendBusBox) return 0;
         const QString sel = sendBusBox->currentText();
-        if(sel=="SX0") return 0;
-        if(sel=="SX1"){
-            bool sx1Seen=false, sx0Seen=false;
-            for(int i=0;i<112;++i){ if(sx1[i]>=0) sx1Seen=true; if(sx0[i]>=0) sx0Seen=true; }
-            if(!sx1Seen && sx0Seen) return 0; // Auto-Fallback: Anlage derzeit offenbar SX0-only
-            return 1;
-        }
+        if(sel.endsWith("1")) return 1;
+        return 0;
+    }
+
+    int effectiveWizardBus() const {
+        return selectedCommandBus();
+    }
+
+    int trackRelevantBus() const {
+        if(!sendBusBox) return 0;
+        const QString sel = sendBusBox->currentText();
+        if(sel=="SX1" || sel=="RMX1") return 1;
         return 0;
     }
     void wizardPrime(int bus, int addrA, int addrB, int servo, int step){
@@ -716,7 +745,7 @@ private:
         }
         wizardPrime(bus, addrA, addrB, servo, step); sendSX(bus,13,move); usleep(120000); sendSX(bus,13,0); usleep(25000);
         appendLog(msg);
-        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6").arg(bus?"SX1":"SX0").arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
+        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6").arg(busLabel(bus)).arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
     }
     void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
         if(useSerialWizard()){
@@ -735,7 +764,7 @@ private:
         if(servo != wizardLockedServo){ appendLog(QString("WARN: MOVE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
         int bus=effectiveWizardBus();
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
-                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
+                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(busLabel(bus)));
         setAckPending(servo, "move", 1);
         if(teleFd>=0 && !cfgImportInProgress && !useSerialWizard()){
             moveAutoCfgCounter++;
@@ -755,7 +784,7 @@ private:
         if(servo != wizardLockedServo){ appendLog(QString("WARN: STORE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
         int bus=effectiveWizardBus();
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
-                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
+                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(busLabel(bus)));
         setAckPending(servo, "store");
         if(teleFd>=0){
             usleep(120000);
@@ -908,7 +937,7 @@ private slots:
             return;
         }
         int val = sendVal->value() & 0xFF;
-        int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
+        int bus = selectedCommandBus();
 
         bool ok = sendSX(bus, adr, val);
         uint8_t cmd = (uint8_t)(0x80 | adr);
@@ -1077,12 +1106,6 @@ private slots:
                 if(teleLineBuf.size()>4096) teleLineBuf.clear();
             }
         }
-    }
-
-    int trackRelevantBus() const {
-        // Aktueller Anlagenstandard: Gleiszustand (Track) kommt von SX0.
-        // SX1 wird für Schalten/Melden genutzt.
-        return 0;
     }
 
     void updateTrackStateUiForSelectedBus(){
