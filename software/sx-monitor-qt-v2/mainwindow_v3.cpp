@@ -97,6 +97,11 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             "QTableWidget { background: white; color: black; gridline-color: #cfcfcf; alternate-background-color: #fafafa; }"
             "QHeaderView::section { background: #f2f2f2; color: black; padding: 4px; font-weight: 600; }"
         );
+        t->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        t->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+        const int tableH = t->horizontalHeader()->height() + t->rowCount() * t->verticalHeader()->defaultSectionSize() + 8;
+        t->setMinimumHeight(tableH);
+        t->setMaximumHeight(tableH);
     }
     sxTabL->addWidget(sxTable);
     rmxTabL->addWidget(rmxTable);
@@ -154,7 +159,10 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendBlock);
-    l->addWidget(tabs,1);
+    const int tabsH = sxTable->maximumHeight() + sxBusSel->sizeHint().height() + 18;
+    tabs->setMinimumHeight(tabsH);
+    tabs->setMaximumHeight(tabsH);
+    l->addWidget(tabs);
     l->addWidget(log,1);
 
     connect(sendBtn,&QPushButton::clicked,this,[this,beBox,busBox,adr,val]{
