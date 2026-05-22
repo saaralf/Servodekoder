@@ -25,6 +25,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* val = new QSpinBox; val->setRange(0,255);
     auto* sendBtn = new QPushButton("Send Test");
     auto* readBtn = new QPushButton("Read Test");
+    auto* autoBtn = new QPushButton("Auto Read 126/127");
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
     sendL->addWidget(new QLabel("Bus")); sendL->addWidget(busBox);
@@ -32,6 +33,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sendL->addWidget(new QLabel("Wert")); sendL->addWidget(val);
     sendL->addWidget(sendBtn);
     sendL->addWidget(readBtn);
+    sendL->addWidget(autoBtn);
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendRow);
@@ -55,6 +57,18 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             .arg(busBox->currentText())
             .arg(adr->value())
             .arg(ok?"OK":"FAIL"));
+    });
+    connect(autoBtn,&QPushButton::clicked,this,[this]{
+        struct T{BackendKind b; const char* n;};
+        T backends[]={{BackendKind::SX,"SX"},{BackendKind::RMX,"RMX"}};
+        for(const auto& x: backends){
+            bool ok126 = ctrl.readAdr(x.b, 0, 126);
+            bool ok127 = ctrl.readAdr(x.b, 0, 127);
+            log->append(QString("AUTO %1 READ b0 a126=%2 a127=%3")
+                .arg(x.n)
+                .arg(ok126?"OK":"FAIL")
+                .arg(ok127?"OK":"FAIL"));
+        }
     });
 
     connect(sxPanel,&ConnectionPanel::connectRequested,this,[this](const QString& ep,int b){
