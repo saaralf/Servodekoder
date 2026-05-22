@@ -8,6 +8,7 @@
 #include <QCheckBox>
 #include <QTabWidget>
 #include <QTableWidget>
+#include <QHeaderView>
 #include <QVBoxLayout>
 #include <QTextEdit>
 #include <QWidget>
@@ -59,6 +60,24 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         rmxTable->setItem(a,1,new QTableWidgetItem("-"));
         rmxTable->setItem(a,2,new QTableWidgetItem("-"));
     }
+    for(auto* t : {sxTable, rmxTable}){
+        t->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
+        t->verticalHeader()->setVisible(false);
+        t->setAlternatingRowColors(true);
+        t->verticalHeader()->setDefaultSectionSize(22);
+        t->setColumnWidth(0, 52);
+        t->setColumnWidth(1, 70);
+        t->setColumnWidth(2, 70);
+        t->setStyleSheet(
+            "QTableWidget { background: white; color: black; gridline-color: #cfcfcf; alternate-background-color: #fafafa; }"
+            "QHeaderView::section { background: #ececec; color: #111; font-weight: 600; border: 1px solid #c8c8c8; padding: 3px; }"
+        );
+    }
+    tabs->setStyleSheet(
+        "QTabBar::tab { background:#e8e8e8; color:#111; border:1px solid #bfbfbf; padding:6px 12px; margin-right:2px; border-top-left-radius:4px; border-top-right-radius:4px; }"
+        "QTabBar::tab:selected { background:#ffffff; border-bottom-color:#ffffff; font-weight:700; }"
+        "QTabWidget::pane { border:1px solid #bfbfbf; top:-1px; }"
+    );
     sxTabL->addWidget(sxTable);
     rmxTabL->addWidget(rmxTable);
     tabs->addTab(sxTab, "SX Monitor");
@@ -194,7 +213,12 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             .arg(bus).arg(adr).arg(val));
         if(adr>=0 && adr<128 && (bus==0 || bus==1)){
             QTableWidget* t = (b==BackendKind::SX)?sxTable:rmxTable;
-            t->item(adr,bus+1)->setText(QString::number(val));
+            QString nv = QString::number(val);
+            if(t->item(adr,bus+1)->text() != nv){
+                t->item(adr,0)->setBackground(QColor(255,245,170));
+                t->item(adr,bus+1)->setBackground(QColor(255,245,170));
+            }
+            t->item(adr,bus+1)->setText(nv);
         }
     });
 }
