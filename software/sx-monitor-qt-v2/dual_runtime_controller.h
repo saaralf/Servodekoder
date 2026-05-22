@@ -12,6 +12,7 @@ public:
     bool connectBackend(BackendKind b, const QString& endpoint, int baud);
     void disconnectBackend(BackendKind b);
     bool send(BackendKind b, int bus, int adr, int val);
+    bool readAdr(BackendKind b, int bus, int adr);
 signals:
     void connectedChanged(BackendKind b, bool on);
     void frameReceived(BackendKind b, int bus, int adr, int val);

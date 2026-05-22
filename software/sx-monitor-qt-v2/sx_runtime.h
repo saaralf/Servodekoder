@@ -14,6 +14,7 @@ public:
     void disconnectPort();
     int poll();
     bool send(int bus, int adr, int val);
+    bool readAdr(int bus, int adr);
 
     std::function<void(int,int,int)> onFrame;
     std::function<void(int)> onTrack;

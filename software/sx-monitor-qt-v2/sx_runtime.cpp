@@ -184,3 +184,20 @@ bool SxRuntime::send(int bus, int adr, int val){
     unsigned char data = (unsigned char)(val & 0xFF);
     return wr2(ctx_.fd, cmd, data)==0;
 }
+
+bool SxRuntime::readAdr(int bus, int adr){
+    if(daemonMode_){
+        if(!connected_ || daemonFd_ < 0) return false;
+        char cmd[64];
+        snprintf(cmd, sizeof(cmd), "READADR %d %d\n", bus, adr);
+        ssize_t wr = ::write(daemonFd_, cmd, strlen(cmd));
+        if(wr <= 0){ if(onStatus) onStatus("daemon read request failed"); return false; }
+        return true;
+    }
+    if(!connected_ || ctx_.fd < 0) return false;
+    unsigned char sel = (bus==1)?0xB1:0xB0;
+    if(wr2(ctx_.fd,0xFE,sel)!=0) return false;
+    usleep(4000);
+    unsigned char cmd = (unsigned char)(adr & 0x7F);
+    return ::write(ctx_.fd, &cmd, 1) == 1;
+}

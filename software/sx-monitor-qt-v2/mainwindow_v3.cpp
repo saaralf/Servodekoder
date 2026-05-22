@@ -24,12 +24,14 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* adr = new QSpinBox; adr->setRange(0,127);
     auto* val = new QSpinBox; val->setRange(0,255);
     auto* sendBtn = new QPushButton("Send Test");
+    auto* readBtn = new QPushButton("Read Test");
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
     sendL->addWidget(new QLabel("Bus")); sendL->addWidget(busBox);
     sendL->addWidget(new QLabel("Adr")); sendL->addWidget(adr);
     sendL->addWidget(new QLabel("Wert")); sendL->addWidget(val);
     sendL->addWidget(sendBtn);
+    sendL->addWidget(readBtn);
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendRow);
@@ -43,6 +45,15 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             .arg(busBox->currentText())
             .arg(adr->value())
             .arg(val->value())
+            .arg(ok?"OK":"FAIL"));
+    });
+    connect(readBtn,&QPushButton::clicked,this,[this,beBox,busBox,adr]{
+        BackendKind b = (beBox->currentText()=="SX") ? BackendKind::SX : BackendKind::RMX;
+        bool ok = ctrl.readAdr(b, busBox->currentText().toInt(), adr->value());
+        log->append(QString("READ %1 b%2 a%3 -> %4")
+            .arg(beBox->currentText())
+            .arg(busBox->currentText())
+            .arg(adr->value())
             .arg(ok?"OK":"FAIL"));
     });
 

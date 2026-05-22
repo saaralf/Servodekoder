@@ -32,3 +32,7 @@ void DualRuntimeController::disconnectBackend(BackendKind b){
 bool DualRuntimeController::send(BackendKind b, int bus, int adr, int val){
     return (b==BackendKind::SX) ? sx.send(bus,adr,val) : rmx.send(bus,adr,val);
 }
+
+bool DualRuntimeController::readAdr(BackendKind b, int bus, int adr){
+    return (b==BackendKind::SX) ? sx.readAdr(bus,adr) : rmx.readAdr(bus,adr);
+}
