@@ -14,6 +14,7 @@
 #include <QWidget>
 #include <QGroupBox>
 #include <QGridLayout>
+#include <vector>
 #include <array>
 #include <memory>
 
@@ -174,6 +175,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     visualL->addLayout(addrArow);
 
     auto* grid = new QGridLayout;
+    std::vector<QLabel*> visualInfo(16, nullptr);
     for(int s=0; s<16; ++s){
         int adr = (s<8) ? visualAddrA->value() : visualAddrB->value();
         int bit = (s%8)+1;
@@ -181,11 +183,34 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         auto* box = new QGroupBox(QString("Servo %1").arg(s+1));
         auto* bl = new QVBoxLayout(box);
         auto* txt = new QLabel(QString("Adresse %1\nBit %2").arg(adr).arg(shown));
+        visualInfo[s] = txt;
         txt->setAlignment(Qt::AlignCenter);
         txt->setStyleSheet("QLabel{background:#eef3ff; border:1px solid #c8d6ff; padding:8px; min-height:72px;}");
         bl->addWidget(txt);
+        auto* actionRow = new QHBoxLayout;
+        auto* bM = new QPushButton("M");
+        auto* bG = new QPushButton("G");
+        auto* bA = new QPushButton("A");
+        auto* bS = new QPushButton("S");
+        actionRow->addWidget(bM); actionRow->addWidget(bG); actionRow->addWidget(bA); actionRow->addWidget(bS);
+        bl->addLayout(actionRow);
+        connect(bM,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok1=ctrl.send(b,bus,11,s); bool ok2=ctrl.send(b,bus,13,3); log->append(QString("V2 S%1 Mitte -> %2/%3").arg(s+1).arg(ok1?"OK":"FAIL").arg(ok2?"OK":"FAIL")); });
+        connect(bG,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok1=ctrl.send(b,bus,11,s); bool ok2=ctrl.send(b,bus,14,1); log->append(QString("V2 S%1 Gerade -> %2/%3").arg(s+1).arg(ok1?"OK":"FAIL").arg(ok2?"OK":"FAIL")); });
+        connect(bA,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok1=ctrl.send(b,bus,11,s); bool ok2=ctrl.send(b,bus,14,2); log->append(QString("V2 S%1 Abzweig -> %2/%3").arg(s+1).arg(ok1?"OK":"FAIL").arg(ok2?"OK":"FAIL")); });
+        connect(bS,&QPushButton::clicked,this,[this,beBox,busBox,s]{ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); bool ok=ctrl.send(b,bus,11,s); log->append(QString("V2 S%1 Select -> %2").arg(s+1).arg(ok?"OK":"FAIL")); });
         grid->addWidget(box, s/8, s%8);
     }
+    auto refreshVisual = [visualInfo,visualAddrA,visualAddrB,visualBitOrder](){
+        for(int s=0;s<16;++s){
+            int adr=(s<8)?visualAddrA->value():visualAddrB->value();
+            int bit=(s%8)+1;
+            int shown=visualBitOrder->isChecked()?bit:(9-bit);
+            if(visualInfo[s]) visualInfo[s]->setText(QString("Adresse %1\nBit %2").arg(adr).arg(shown));
+        }
+    };
+    connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [refreshVisual](int){ refreshVisual(); });
+    connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [refreshVisual](int){ refreshVisual(); });
+    connect(visualBitOrder, &QCheckBox::toggled, this, [refreshVisual](bool){ refreshVisual(); });
     visualL->addLayout(grid);
     tabs->addTab(visualTab, "Servo-Bildansicht V2");
 
