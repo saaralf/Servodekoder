@@ -13,6 +13,12 @@
 #include <QTextEdit>
 #include <QWidget>
 
+static QString bits8(int v){
+    QString s; s.reserve(8);
+    for(int i=7;i>=0;--i) s.append((v & (1<<i)) ? '1' : '0');
+    return s;
+}
+
 MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* c = new QWidget; setCentralWidget(c);
     auto* l = new QVBoxLayout(c);
@@ -48,26 +54,42 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* rmxTab = new QWidget;
     auto* sxTabL = new QVBoxLayout(sxTab);
     auto* rmxTabL = new QVBoxLayout(rmxTab);
-    auto* sxTable = new QTableWidget(128,3);
-    auto* rmxTable = new QTableWidget(128,3);
-    sxTable->setHorizontalHeaderLabels({"Adr","SX0","SX1"});
-    rmxTable->setHorizontalHeaderLabels({"Adr","RMX0","RMX1"});
-    for(int a=0;a<128;++a){
-        sxTable->setItem(a,0,new QTableWidgetItem(QString::number(a)));
-        sxTable->setItem(a,1,new QTableWidgetItem("-"));
-        sxTable->setItem(a,2,new QTableWidgetItem("-"));
-        rmxTable->setItem(a,0,new QTableWidgetItem(QString::number(a)));
-        rmxTable->setItem(a,1,new QTableWidgetItem("-"));
-        rmxTable->setItem(a,2,new QTableWidgetItem("-"));
+    auto* sxTable = new QTableWidget(38,9);
+    auto* rmxTable = new QTableWidget(38,9);
+    sxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
+    rmxTable->setHorizontalHeaderLabels({"Adr","Wert","Bits","Adr","Wert","Bits","Adr","Wert","Bits"});
+    for(int row=0; row<38; ++row){
+        for(int blk=0; blk<3; ++blk){
+            int adr = blk*38 + row;
+            int base = blk*3;
+            if(adr<=111){
+                sxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
+                sxTable->setItem(row,base+1,new QTableWidgetItem("-"));
+                sxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
+                rmxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
+                rmxTable->setItem(row,base+1,new QTableWidgetItem("-"));
+                rmxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
+            } else {
+                sxTable->setItem(row,base+0,new QTableWidgetItem(""));
+                sxTable->setItem(row,base+1,new QTableWidgetItem(""));
+                sxTable->setItem(row,base+2,new QTableWidgetItem(""));
+                rmxTable->setItem(row,base+0,new QTableWidgetItem(""));
+                rmxTable->setItem(row,base+1,new QTableWidgetItem(""));
+                rmxTable->setItem(row,base+2,new QTableWidgetItem(""));
+            }
+        }
     }
     for(auto* t : {sxTable, rmxTable}){
         t->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
         t->verticalHeader()->setVisible(false);
         t->setAlternatingRowColors(true);
         t->verticalHeader()->setDefaultSectionSize(22);
-        t->setColumnWidth(0, 52);
-        t->setColumnWidth(1, 70);
-        t->setColumnWidth(2, 70);
+        for(int blk=0; blk<3; ++blk){
+            int base=blk*3;
+            t->setColumnWidth(base+0, 44);
+            t->setColumnWidth(base+1, 54);
+            t->setColumnWidth(base+2, 86);
+        }
         t->setStyleSheet(
             "QTableWidget { background: white; color: black; gridline-color: #cfcfcf; alternate-background-color: #fafafa; }"
             "QHeaderView::section { background: #ececec; color: #111; font-weight: 600; border: 1px solid #c8c8c8; padding: 3px; }"
@@ -211,14 +233,19 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
             .arg(bus).arg(adr).arg(val));
-        if(adr>=0 && adr<128 && (bus==0 || bus==1)){
+        if(adr>=0 && adr<=111){
             QTableWidget* t = (b==BackendKind::SX)?sxTable:rmxTable;
+            int row = adr % 38;
+            int blk = adr / 38;
+            int base = blk*3;
             QString nv = QString::number(val);
-            if(t->item(adr,bus+1)->text() != nv){
-                t->item(adr,0)->setBackground(QColor(255,245,170));
-                t->item(adr,bus+1)->setBackground(QColor(255,245,170));
+            if(t->item(row,base+1)->text() != nv){
+                t->item(row,base+0)->setBackground(QColor(255,245,170));
+                t->item(row,base+1)->setBackground(QColor(255,245,170));
+                t->item(row,base+2)->setBackground(QColor(255,245,170));
             }
-            t->item(adr,bus+1)->setText(nv);
+            t->item(row,base+1)->setText(nv);
+            t->item(row,base+2)->setText(bits8(val));
         }
     });
 }
