@@ -18,6 +18,54 @@
 #include <vector>
 #include <array>
 #include <memory>
+#include <QPainter>
+#include <QPixmap>
+#include <QCoreApplication>
+
+class ServoArmWidget : public QWidget {
+public:
+    explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
+        setMinimumSize(150,150);
+        QString base = QCoreApplication::applicationDirPath() + "/../assets/";
+        body = QPixmap(base + "servo_body_blue.png");
+        arm = QPixmap(base + "servo_arm_new.png");
+        bodyHubX = 624.7 / 1254.0;
+        bodyHubY = 361.0 / 1254.0;
+        armHubX  = 0.5;
+        armHubY  = 0.5;
+    }
+    void setAngleDeg(int a){ angle = qBound(-90, a, 90); update(); }
+protected:
+    void paintEvent(QPaintEvent*) override {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing,true);
+        p.fillRect(rect(), palette().color(QPalette::Window));
+        QRectF view = rect().adjusted(6, 6, -6, -6);
+        double base = 1000.0;
+        QRectF bodyR(0, 0, base, base);
+        QPointF c(bodyHubX*base, bodyHubY*base);
+        double armSide = base * 1.20;
+        QRectF armR(c.x() - armHubX*armSide, c.y() - armHubY*armSide, armSide, armSide);
+        double halfDiag = (armSide * 0.5) * 1.41421356237;
+        QRectF armBound(c.x()-halfDiag, c.y()-halfDiag, 2*halfDiag, 2*halfDiag);
+        QRectF scene = bodyR.united(armBound);
+        double s = qMin(view.width()/scene.width(), view.height()/scene.height());
+        QPointF t(view.center().x() - s*scene.center().x(), view.center().y() - s*scene.center().y());
+        p.save(); p.translate(t); p.scale(s, s);
+        if(!body.isNull()) p.drawPixmap(bodyR.toRect(), body);
+        if(!arm.isNull()){
+            p.save(); p.translate(c); p.rotate((double)-angle - 90.0); p.translate(-c);
+            p.drawPixmap(armR.toRect(), arm); p.restore();
+        }
+        p.restore();
+        p.setPen(QPen(QColor(30,30,30),1));
+        p.drawText(QRect(0,0,width(),20), Qt::AlignCenter, QString("%1°").arg(angle));
+    }
+private:
+    int angle = 0;
+    QPixmap body, arm;
+    double bodyHubX = 0.5, bodyHubY = 0.3, armHubX = 0.5, armHubY = 0.5;
+};
 
 static QString bits8(int v){
     QString s; s.reserve(8);
@@ -177,7 +225,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
 
     auto* grid = new QGridLayout;
     std::vector<QLabel*> visualInfo(16, nullptr);
-    std::vector<QProgressBar*> visualArm(16, nullptr);
+    std::vector<ServoArmWidget*> visualArm(16, nullptr);
     for(int s=0; s<16; ++s){
         int adr = (s<8) ? visualAddrA->value() : visualAddrB->value();
         int bit = (s%8)+1;
@@ -189,12 +237,10 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         txt->setAlignment(Qt::AlignCenter);
         txt->setStyleSheet("QLabel{background:#eef3ff; border:1px solid #c8d6ff; padding:8px; min-height:72px;}");
         bl->addWidget(txt);
-        auto* armBar = new QProgressBar;
-        armBar->setRange(0,180);
-        armBar->setValue(90);
-        armBar->setFormat("Winkel %v°");
-        visualArm[s] = armBar;
-        bl->addWidget(armBar);
+        auto* armW = new ServoArmWidget;
+        armW->setAngleDeg(0);
+        visualArm[s] = armW;
+        bl->addWidget(armW);
         auto* actionRow = new QHBoxLayout;
         auto* bM = new QPushButton("M");
         auto* bG = new QPushButton("G");
@@ -426,8 +472,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 int bit = (s%8)+1;
                 int bitIdx = visualBitOrder->isChecked() ? (bit-1) : (8-bit);
                 int on = (val >> bitIdx) & 0x1;
-                int angle = on ? 130 : 50;
-                if(visualArm[s]) visualArm[s]->setValue(angle);
+                int angle = on ? 40 : -40;
+                if(visualArm[s]) visualArm[s]->setAngleDeg(angle);
             }
         }
     });
