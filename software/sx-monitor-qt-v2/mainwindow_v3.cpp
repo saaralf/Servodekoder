@@ -78,6 +78,15 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         t->verticalHeader()->setVisible(false);
         t->setAlternatingRowColors(true);
         t->verticalHeader()->setDefaultSectionSize(22);
+        for(int adr=0; adr<112; ++adr){
+            int row = adr % 28;
+            int blk = adr / 28;
+            int base = blk * 3;
+            for(int c=base; c<base+3; ++c){
+                t->item(row,c)->setForeground(QBrush(Qt::black));
+                t->item(row,c)->setBackground(QBrush(Qt::white));
+            }
+        }
         for(int blk=0; blk<4; ++blk){
             int base=blk*3;
             t->setColumnWidth(base+0, 42);
@@ -86,14 +95,9 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         }
         t->setStyleSheet(
             "QTableWidget { background: white; color: black; gridline-color: #cfcfcf; alternate-background-color: #fafafa; }"
-            "QHeaderView::section { background: #ececec; color: #111; font-weight: 600; border: 1px solid #c8c8c8; padding: 3px; }"
+            "QHeaderView::section { background: #f2f2f2; color: black; padding: 4px; font-weight: 600; }"
         );
     }
-    tabs->setStyleSheet(
-        "QTabBar::tab { background:#e8e8e8; color:#111; border:1px solid #bfbfbf; padding:6px 12px; margin-right:2px; border-top-left-radius:4px; border-top-right-radius:4px; }"
-        "QTabBar::tab:selected { background:#ffffff; border-bottom-color:#ffffff; font-weight:700; }"
-        "QTabWidget::pane { border:1px solid #bfbfbf; top:-1px; }"
-    );
     sxTabL->addWidget(sxTable);
     rmxTabL->addWidget(rmxTable);
     sxTabL->insertWidget(0, sxBusSel);
