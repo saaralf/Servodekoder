@@ -278,4 +278,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             t->item(row,base+2)->setText(bits8(val));
         }
     });
+
+    adjustSize();
+    resize(sizeHint());
+    setMinimumSize(sizeHint());
 }
