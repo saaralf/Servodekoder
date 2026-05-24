@@ -37,6 +37,8 @@
 #include <QFormLayout>
 #include <QMessageBox>
 #include <QPlainTextEdit>
+#include <QToolButton>
+#include <array>
 
 class ServoArmWidget : public QWidget {
 public:
@@ -86,16 +88,6 @@ private:
 static QString bits8(int v){
     QString s; s.reserve(8);
     for(int i=7;i>=0;--i) s.append((v & (1<<i)) ? '1' : '0');
-    return s;
-}
-
-static QString bitsButtons(int v){
-    QString s;
-    for(int i=7;i>=0;--i){
-        const bool on = (v & (1<<i)) != 0;
-        s += on ? "[1]" : "[0]";
-        if(i>0) s += " ";
-    }
     return s;
 }
 
@@ -532,7 +524,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         int base = blk * 3;
         sxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
         sxTable->setItem(row,base+1,new QTableWidgetItem("-"));
-        sxTable->setItem(row,base+2,new QTableWidgetItem(bitsButtons(0)));
+        sxTable->setItem(row,base+2,new QTableWidgetItem(""));
         rmxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
         rmxTable->setItem(row,base+1,new QTableWidgetItem("-"));
         rmxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
@@ -577,6 +569,55 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         bool ok = ctrl.send(BackendKind::SX, bus, adr, out);
         log->append(QString("BITSEND SX b%1 a%2 v%3 -> %4").arg(bus).arg(adr).arg(out).arg(ok?"OK":"FAIL"));
     };
+
+    auto createBitButtonsCell = [this, sxBusSel, sxTable](int adr, int value){
+        auto* host = new QWidget;
+        auto* hl = new QHBoxLayout(host);
+        hl->setContentsMargins(1,1,1,1);
+        hl->setSpacing(2);
+
+        for(int bit=7; bit>=0; --bit){
+            auto* b = new QToolButton(host);
+            b->setAutoRaise(false);
+            b->setProperty("adr", adr);
+            b->setProperty("bit", bit);
+            bool on = (value & (1<<bit)) != 0;
+            b->setText(on ? "1" : "0");
+            b->setStyleSheet(on
+                ? "QToolButton{min-width:16px; min-height:18px; font-weight:700; color:#08120a; background:#22c55e; border:1px solid #0b3d17; border-radius:2px;}"
+                : "QToolButton{min-width:16px; min-height:18px; font-weight:700; color:#f8fafc; background:#475569; border:1px solid #1e293b; border-radius:2px;}");
+            hl->addWidget(b);
+            QObject::connect(b, &QToolButton::clicked, host, [this, sxBusSel, sxTable, b]{
+                int adr = b->property("adr").toInt();
+                int bit = b->property("bit").toInt();
+                if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)){
+                    log->append(QString("BITSEND BLOCKIERT a%1 (reserviert)").arg(adr));
+                    return;
+                }
+                int row = adr % 28;
+                int blk = adr / 28;
+                int base = blk * 3;
+                auto* valItem = sxTable->item(row, base+1);
+                if(!valItem) return;
+                bool okVal=false;
+                int cur = valItem->text().toInt(&okVal);
+                if(!okVal) return;
+                int out = cur ^ (1 << bit);
+                int bus = sxBusSel->currentIndex();
+                bool ok = ctrl.send(BackendKind::SX, bus, adr, out);
+                log->append(QString("BITBTN SX b%1 a%2 bit%3 %4->%5 -> %6")
+                    .arg(bus).arg(adr).arg(bit).arg(cur).arg(out).arg(ok?"OK":"FAIL"));
+            });
+        }
+        return host;
+    };
+
+    for(int adr=0; adr<112; ++adr){
+        int row = adr % 28;
+        int blk = adr / 28;
+        int base = blk * 3;
+        sxTable->setCellWidget(row, base+2, createBitButtonsCell(adr, 0));
+    }
 
     for(auto* t : {sxTable, rmxTable}){
         t->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
@@ -624,36 +665,6 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         if(!okAdr) return;
         if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)) return; // reserviert
         openBitSendDialog(adr);
-    });
-
-    connect(sxTable, &QTableWidget::cellClicked, this, [this, sxTable, sxBusSel](int row, int column){
-        if(column % 3 != 2) return; // nur Bits-Spalte
-        QTableWidgetItem* adrItem = sxTable->item(row, column-2);
-        QTableWidgetItem* valItem = sxTable->item(row, column-1);
-        if(!adrItem || !valItem) return;
-        bool okAdr=false, okVal=false;
-        int adr = adrItem->text().toInt(&okAdr);
-        int cur = valItem->text().toInt(&okVal);
-        if(!okAdr || !okVal) return;
-        if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)){
-            log->append(QString("BITSEND BLOCKIERT a%1 (reserviert)").arg(adr));
-            return;
-        }
-
-        QRect vr = sxTable->visualRect(sxTable->model()->index(row, column));
-        QPoint p = sxTable->viewport()->mapFromGlobal(QCursor::pos());
-        if(!vr.contains(p)) return;
-        int relX = p.x() - vr.left();
-        int w = std::max(1, vr.width());
-        int bitW = std::max(1, w / 8);
-        int idxFromLeft = std::clamp(relX / bitW, 0, 7);
-        int bit = 7 - idxFromLeft;
-
-        int out = cur ^ (1 << bit);
-        int bus = sxBusSel->currentIndex();
-        bool ok = ctrl.send(BackendKind::SX, bus, adr, out);
-        log->append(QString("BITTOGGLE SX b%1 a%2 bit%3 %4->%5 -> %6")
-            .arg(bus).arg(adr).arg(bit).arg(cur).arg(out).arg(ok?"OK":"FAIL"));
     });
 
     auto* r1 = new QHBoxLayout;
@@ -1042,7 +1053,22 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 t->item(row,base+2)->setBackground(QColor(255,245,170));
             }
             t->item(row,base+1)->setText(nv);
-            t->item(row,base+2)->setText((b==BackendKind::SX) ? bitsButtons(val) : bits8(val));
+            if(b==BackendKind::SX){
+                auto* w = sxTable->cellWidget(row, base+2);
+                if(w){
+                    auto btns = w->findChildren<QToolButton*>();
+                    for(auto* bt : btns){
+                        int bit = bt->property("bit").toInt();
+                        bool on = (val & (1<<bit)) != 0;
+                        bt->setText(on ? "1" : "0");
+                        bt->setStyleSheet(on
+                            ? "QToolButton{min-width:16px; min-height:18px; font-weight:700; color:#08120a; background:#22c55e; border:1px solid #0b3d17; border-radius:2px;}"
+                            : "QToolButton{min-width:16px; min-height:18px; font-weight:700; color:#f8fafc; background:#475569; border:1px solid #1e293b; border-radius:2px;}");
+                    }
+                }
+            } else {
+                t->item(row,base+2)->setText(bits8(val));
+            }
 
             int adrA = visualAddrA->value();
             int adrB = visualAddrB->value();
