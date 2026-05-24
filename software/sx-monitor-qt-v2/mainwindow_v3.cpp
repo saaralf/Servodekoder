@@ -525,6 +525,47 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         rmxTable->setItem(row,base+1,new QTableWidgetItem("-"));
         rmxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
     }
+    auto openBitSendDialog = [this, sxBusSel, sxTable](int adr){
+        if(adr < 0 || adr > 111) return;
+        int row = adr % 28;
+        int blk = adr / 28;
+        int base = blk * 3;
+        QTableWidgetItem* valItem = sxTable->item(row, base+1);
+        int current = valItem ? valItem->text().toInt() : 0;
+
+        QDialog dlg(this);
+        dlg.setWindowTitle(QString("SX Bit-Senden ADR %1").arg(adr));
+        auto* v = new QVBoxLayout(&dlg);
+        v->addWidget(new QLabel(QString("Adresse %1 (SX%2)").arg(adr).arg(sxBusSel->currentIndex())));
+        auto* bitsRow = new QHBoxLayout;
+        std::array<QCheckBox*,8> bits{};
+        for(int i=7;i>=0;--i){
+            auto* cb = new QCheckBox(QString::number(i));
+            cb->setChecked((current >> i) & 0x1);
+            bits[i] = cb;
+            bitsRow->addWidget(cb);
+        }
+        v->addLayout(bitsRow);
+        auto* valueLbl = new QLabel(QString("Wert: %1").arg(current));
+        v->addWidget(valueLbl);
+        auto recompute = [bits, valueLbl](){
+            int v=0; for(int i=0;i<8;++i) if(bits[i] && bits[i]->isChecked()) v |= (1<<i);
+            valueLbl->setText(QString("Wert: %1").arg(v));
+        };
+        for(int i=0;i<8;++i) if(bits[i]) QObject::connect(bits[i], &QCheckBox::toggled, &dlg, recompute);
+        auto* bb = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+        bb->button(QDialogButtonBox::Ok)->setText("Senden");
+        v->addWidget(bb);
+        QObject::connect(bb, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+        QObject::connect(bb, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+        if(dlg.exec() != QDialog::Accepted) return;
+
+        int out=0; for(int i=0;i<8;++i) if(bits[i] && bits[i]->isChecked()) out |= (1<<i);
+        int bus = sxBusSel->currentIndex();
+        bool ok = ctrl.send(BackendKind::SX, bus, adr, out);
+        log->append(QString("BITSEND SX b%1 a%2 v%3 -> %4").arg(bus).arg(adr).arg(out).arg(ok?"OK":"FAIL"));
+    };
+
     for(auto* t : {sxTable, rmxTable}){
         t->horizontalHeader()->setSectionResizeMode(QHeaderView::Fixed);
         t->verticalHeader()->setVisible(false);
@@ -561,6 +602,17 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     rmxTabL->insertWidget(0, rmxBusSel);
     tabs->addTab(sxTab, "SX Monitor");
     tabs->addTab(rmxTab, "RMX Monitor");
+
+    connect(sxTable, &QTableWidget::cellDoubleClicked, this, [this, sxTable, openBitSendDialog](int row, int column){
+        if(column % 3 != 2) return; // nur Bits-Spalte
+        QTableWidgetItem* adrItem = sxTable->item(row, column-2);
+        if(!adrItem) return;
+        bool okAdr=false;
+        int adr = adrItem->text().toInt(&okAdr);
+        if(!okAdr) return;
+        if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)) return; // reserviert
+        openBitSendDialog(adr);
+    });
 
     auto* r1 = new QHBoxLayout;
     auto* progAddrA = new QSpinBox; progAddrA->setRange(1,111);
