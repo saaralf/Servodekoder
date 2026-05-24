@@ -426,7 +426,6 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     l->addWidget(sendBlock);
     const int tabsH = sxTable->maximumHeight() + sxBusSel->sizeHint().height() + 18;
     tabs->setMinimumHeight(tabsH);
-    tabs->setMaximumHeight(tabsH);
     l->addWidget(tabs);
     l->addWidget(log,1);
 
@@ -558,7 +557,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         }
     });
 
-    adjustSize();
-    resize(sizeHint());
+    c->adjustSize();
+    const QSize wanted = c->sizeHint() + QSize(36, 36);
+    resize(wanted.expandedTo(QSize(1400, 900)));
     setMinimumSize(900, 650);
 }
