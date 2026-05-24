@@ -27,6 +27,8 @@
 #include <QMenuBar>
 #include <QProcess>
 #include <QTimer>
+#include <QCursor>
+#include <algorithm>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
@@ -612,6 +614,36 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         if(!okAdr) return;
         if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)) return; // reserviert
         openBitSendDialog(adr);
+    });
+
+    connect(sxTable, &QTableWidget::cellClicked, this, [this, sxTable, sxBusSel](int row, int column){
+        if(column % 3 != 2) return; // nur Bits-Spalte
+        QTableWidgetItem* adrItem = sxTable->item(row, column-2);
+        QTableWidgetItem* valItem = sxTable->item(row, column-1);
+        QTableWidgetItem* bitsItem = sxTable->item(row, column);
+        if(!adrItem || !valItem || !bitsItem) return;
+        bool okAdr=false, okVal=false;
+        int adr = adrItem->text().toInt(&okAdr);
+        int cur = valItem->text().toInt(&okVal);
+        if(!okAdr || !okVal) return;
+        if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)){
+            log->append(QString("BITSEND BLOCKIERT a%1 (reserviert)").arg(adr));
+            return;
+        }
+
+        QRect vr = sxTable->visualItemRect(bitsItem);
+        QPoint p = sxTable->viewport()->mapFromGlobal(QCursor::pos());
+        if(!vr.contains(p)) return;
+        int relX = p.x() - vr.left();
+        int w = std::max(1, vr.width());
+        int idxFromLeft = std::clamp((relX * 8) / w, 0, 7);
+        int bit = 7 - idxFromLeft;
+
+        int out = cur ^ (1 << bit);
+        int bus = sxBusSel->currentIndex();
+        bool ok = ctrl.send(BackendKind::SX, bus, adr, out);
+        log->append(QString("BITTOGGLE SX b%1 a%2 bit%3 %4->%5 -> %6")
+            .arg(bus).arg(adr).arg(bit).arg(cur).arg(out).arg(ok?"OK":"FAIL"));
     });
 
     auto* r1 = new QHBoxLayout;
