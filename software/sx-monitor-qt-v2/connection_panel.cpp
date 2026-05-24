@@ -32,6 +32,17 @@ void ConnectionPanel::setConnected(bool on){
     connectBtn->setStyleSheet(on ? "QPushButton{background:#2fa84f; color:white; font-weight:600;}" : "");
     disconnectBtn->setEnabled(on);
 }
+void ConnectionPanel::setHardwareWarning(bool on){
+    if(on){
+        statusLbl->setText("daemon online / HW ?");
+        statusLbl->setStyleSheet("QLabel{color:#8a6500; font-weight:600;}");
+        connectBtn->setStyleSheet("QPushButton{background:#f2c94c; color:#202020; font-weight:600;}");
+    } else {
+        statusLbl->setText("online");
+        statusLbl->setStyleSheet("QLabel{color:#0a7f20; font-weight:600;}");
+        connectBtn->setStyleSheet("QPushButton{background:#2fa84f; color:white; font-weight:600;}");
+    }
+}
 void ConnectionPanel::setTrackState(int t){
     if(t<0) trackLbl->setText("Track: ?");
     else if(t==0) trackLbl->setText("Track: AUS");

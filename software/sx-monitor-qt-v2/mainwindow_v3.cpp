@@ -510,15 +510,26 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(rmxPanel,&ConnectionPanel::disconnectRequested,this,[this]{ ctrl.disconnectBackend(BackendKind::RMX); });
 
     connect(&ctrl,&DualRuntimeController::connectedChanged,this,[this](BackendKind b,bool on){
-        if(b==BackendKind::SX) sxPanel->setConnected(on); else rmxPanel->setConnected(on);
+        ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
+        panel->setConnected(on);
+        if(on && panel->endpoint().startsWith("daemon://")) panel->setHardwareWarning(true);
     });
     connect(&ctrl,&DualRuntimeController::trackUpdated,this,[this](BackendKind b,int t){
-        if(b==BackendKind::SX) sxPanel->setTrackState(t); else rmxPanel->setTrackState(t);
+        ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
+        panel->setTrackState(t);
+        if(t >= 0) panel->setHardwareWarning(false);
+        else if(panel->endpoint().startsWith("daemon://")) panel->setHardwareWarning(true);
     });
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
+        ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
+        if(panel->endpoint().startsWith("daemon://")){
+            if(s.contains("ERR", Qt::CaseInsensitive) || s.contains("track unknown", Qt::CaseInsensitive)) panel->setHardwareWarning(true);
+            else if(s.contains("daemon ack: OK", Qt::CaseInsensitive)) panel->setHardwareWarning(false);
+        }
     });
     connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel,visualAddrA,visualAddrB,visualBitOrder,visualArm,visualAngle,visualLimitSpin](BackendKind b,int bus,int adr,int val){
+        if(b==BackendKind::SX) sxPanel->setHardwareWarning(false); else rmxPanel->setHardwareWarning(false);
         if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")

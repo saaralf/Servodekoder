@@ -9,6 +9,7 @@ public:
     QString endpoint() const;
     int baud() const;
     void setConnected(bool on);
+    void setHardwareWarning(bool on);
     void setTrackState(int track); // -1 unknown, 0 off, 1 on
 signals:
     void connectRequested(const QString& endpoint, int baud);
