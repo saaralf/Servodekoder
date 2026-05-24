@@ -98,6 +98,14 @@ static const char* kRmxDaemonBinary = "/opt/programme/selectrix/Servodekoder/sof
 static const char* kSxSocket = "/run/user/1000/sxbusd.sock";
 static const char* kRmxSocket = "/tmp/sxbusd_rmx.sock";
 
+static bool hasValidOverridePort(const QString& service){
+    const QString path = QDir::homePath() + QString("/.config/systemd/user/%1.d/override.conf").arg(service);
+    QFile f(path);
+    if(!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
+    const QString txt = QString::fromUtf8(f.readAll());
+    return txt.contains("/dev/serial/by-id/") || txt.contains("/dev/ttyUSB") || txt.contains("/dev/ttyACM");
+}
+
 void MainWindowV3::applyRmxCentralStyle(){
     setStyleSheet(R"RMX(
         QMainWindow, QScrollArea, QWidget {
@@ -236,11 +244,15 @@ void MainWindowV3::daemonServiceAction(const QString& service, const QString& ac
 }
 
 void MainWindowV3::startRequiredDaemonsIfNeeded(){
-    const struct Item { const char* service; const char* label; } items[] = {
-        {kSxService, "SX"},
-        {kRmxService, "RMX"},
+    const struct Item { const char* service; const char* label; bool requirePort; } items[] = {
+        {kSxService, "SX", true},
+        {kRmxService, "RMX", true},
     };
     for(const auto& item : items){
+        if(item.requirePort && !hasValidOverridePort(item.service)){
+            if(log) log->append(QString("Daemon %1 übersprungen — kein USB-Port konfiguriert (%2)").arg(item.label, item.service));
+            continue;
+        }
         if(serviceActive(item.service)){
             if(log) log->append(QString("Daemon %1 läuft bereits (%2)").arg(item.label, item.service));
         } else {
@@ -254,7 +266,12 @@ void MainWindowV3::connectBackendFromPanel(BackendKind backend){
     ConnectionPanel* panel = (backend==BackendKind::SX) ? sxPanel : rmxPanel;
     const char* label = (backend==BackendKind::SX) ? "SX" : "RMX";
     if(panel->endpoint().startsWith("daemon://")){
-        daemonServiceAction(backend==BackendKind::SX ? kSxService : kRmxService, "start", label);
+        const char* service = backend==BackendKind::SX ? kSxService : kRmxService;
+        if(!hasValidOverridePort(service)){
+            log->append(QString("%1 connect übersprungen — kein USB-Port konfiguriert. Bitte Konfiguration → SX/RMX USB-Port auswählen...").arg(label));
+            return;
+        }
+        daemonServiceAction(service, "start", label);
     }
     bool ok = ctrl.connectBackend(backend, panel->endpoint(), panel->baud());
     log->append(QString("%1 connect %2").arg(label, ok?"OK":"FAIL"));
