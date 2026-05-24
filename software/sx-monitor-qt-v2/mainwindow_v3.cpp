@@ -443,6 +443,40 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     setupDaemonMenu();
     QTimer::singleShot(0, this, [this]{ startRequiredDaemonsIfNeeded(); });
 
+    auto* trackPanel = new QWidget;
+    auto* trackPanelL = new QHBoxLayout(trackPanel);
+    trackPanelL->setContentsMargins(4, 4, 4, 4);
+    auto* trackStartBtn = new QPushButton("START");
+    trackStartBtn->setMinimumSize(78, 54);
+    trackStartBtn->setStyleSheet("QPushButton{font-size:18px; font-weight:900; color:white; background:qlineargradient(x1:0,y1:0,x2:0,y2:1,stop:0 #4f5c75,stop:0.45 #111827,stop:1 #05070d); border:2px solid #0b0f18;} QPushButton:hover{border:2px solid #dbeafe; background:#1d4f91;}");
+    auto* trackStatusBox = new QLabel;
+    trackStatusBox->setFixedSize(64, 54);
+    trackStatusBox->setToolTip("Gleisstatus: rot=AUS, grün=AN, grau=unbekannt");
+    auto* trackText = new QLabel("Gleis: ?");
+    trackText->setMinimumWidth(120);
+    auto trackState = std::make_shared<int>(-1);
+    auto updateTrackPanel = [trackStatusBox, trackText, trackStartBtn, trackState](int t){
+        *trackState = t;
+        if(t == 1){
+            trackStatusBox->setStyleSheet("QLabel{background:#10c020; border:2px solid #041006;}");
+            trackText->setText("Gleis: AN");
+            trackStartBtn->setText("STOP");
+        } else if(t == 0){
+            trackStatusBox->setStyleSheet("QLabel{background:#e00000; border:2px solid #160000;}");
+            trackText->setText("Gleis: AUS");
+            trackStartBtn->setText("START");
+        } else {
+            trackStatusBox->setStyleSheet("QLabel{background:#606878; border:2px solid #10141c;}");
+            trackText->setText("Gleis: ?");
+            trackStartBtn->setText("START");
+        }
+    };
+    updateTrackPanel(-1);
+    trackPanelL->addWidget(trackStartBtn);
+    trackPanelL->addWidget(trackStatusBox);
+    trackPanelL->addWidget(trackText);
+    trackPanelL->addStretch(1);
+
     auto* sendBlock = new QWidget;
     auto* sendBlockL = new QVBoxLayout(sendBlock);
     auto* sendRow = new QWidget;
@@ -778,6 +812,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sendBlockL->addWidget(sendRow);
     sendBlockL->addWidget(opsRow);
 
+    l->addWidget(trackPanel);
     l->addWidget(sxPanel);
     l->addWidget(rmxPanel);
     l->addWidget(sendBlock);
@@ -854,6 +889,15 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(pRead126Btn,&QPushButton::clicked,this,[adr]{ adr->setValue(126); });
     connect(pRead127Btn,&QPushButton::clicked,this,[adr]{ adr->setValue(127); });
     connect(clearLogBtn,&QPushButton::clicked,this,[this]{ log->clear(); });
+    connect(trackStartBtn,&QPushButton::clicked,this,[this,trackState]{
+        const int target = (*trackState == 1) ? 0 : 1;
+        bool ok = ctrl.send(BackendKind::SX, 0, 0, target);
+        log->append(QString("GLEIS %1: WRITE SX0 ADR0=%2 -> %3")
+            .arg(target ? "START/AN" : "STOP/AUS")
+            .arg(target)
+            .arg(ok ? "OK" : "FAIL"));
+        ctrl.readAdr(BackendKind::SX, 0, 127);
+    });
 
     connect(sxPanel,&ConnectionPanel::connectRequested,this,[this](const QString&,int){ connectBackendFromPanel(BackendKind::SX); });
     connect(rmxPanel,&ConnectionPanel::connectRequested,this,[this](const QString&,int){ connectBackendFromPanel(BackendKind::RMX); });
@@ -865,9 +909,10 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         panel->setConnected(on);
         if(on && panel->endpoint().startsWith("daemon://")) panel->setHardwareWarning(true);
     });
-    connect(&ctrl,&DualRuntimeController::trackUpdated,this,[this](BackendKind b,int t){
+    connect(&ctrl,&DualRuntimeController::trackUpdated,this,[this,updateTrackPanel](BackendKind b,int t){
         ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
         panel->setTrackState(t);
+        if(b==BackendKind::SX) updateTrackPanel(t);
         if(t >= 0) panel->setHardwareWarning(false);
         else if(panel->endpoint().startsWith("daemon://")) panel->setHardwareWarning(true);
     });
