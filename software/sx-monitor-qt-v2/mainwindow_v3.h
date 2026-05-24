@@ -10,6 +10,7 @@ public:
     explicit MainWindowV3(QWidget* parent=nullptr);
 private:
     void setupDaemonMenu();
+    void applyRmxCentralStyle();
     bool systemctlUser(const QStringList& args, QString* output=nullptr);
     bool serviceActive(const QString& service);
     void daemonServiceAction(const QString& service, const QString& action, const QString& label);

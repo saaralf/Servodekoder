@@ -94,6 +94,109 @@ static const char* kRmxDaemonBinary = "/opt/programme/selectrix/Servodekoder/sof
 static const char* kSxSocket = "/run/user/1000/sxbusd.sock";
 static const char* kRmxSocket = "/tmp/sxbusd_rmx.sock";
 
+void MainWindowV3::applyRmxCentralStyle(){
+    setStyleSheet(R"RMX(
+        QMainWindow, QScrollArea, QWidget {
+            background: #66738d;
+            color: #ffffff;
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 12px;
+        }
+        QMenuBar {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #78849b, stop:0.45 #4b5368, stop:1 #252936);
+            color: #ffffff;
+            border-bottom: 2px solid #05070d;
+            padding: 2px 6px;
+        }
+        QMenuBar::item { background: transparent; padding: 5px 10px; }
+        QMenuBar::item:selected { background: #1d3d70; border: 1px solid #9fb8de; }
+        QMenu {
+            background: #2f3648;
+            color: #ffffff;
+            border: 1px solid #05070d;
+        }
+        QMenu::item { padding: 5px 24px; }
+        QMenu::item:selected { background: #2f6fb7; }
+        QGroupBox {
+            background: #66738d;
+            color: #ffffff;
+            font-weight: bold;
+            border: 2px solid #11141c;
+            border-top: 22px solid #11141c;
+            margin-top: 24px;
+            padding: 8px;
+        }
+        QGroupBox::title {
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 8px;
+            top: 3px;
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: bold;
+        }
+        QLabel { color: #ffffff; }
+        QLineEdit, QSpinBox, QComboBox {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #f7f8fb, stop:1 #c8d0df);
+            color: #0b1020;
+            border: 1px solid #101522;
+            min-height: 20px;
+            padding: 1px 4px;
+        }
+        QPushButton {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #f4f5f8, stop:0.15 #777f90, stop:0.55 #222837, stop:1 #05070d);
+            color: #ffffff;
+            border: 1px solid #000000;
+            border-radius: 1px;
+            padding: 4px 10px;
+            font-weight: bold;
+            min-height: 20px;
+        }
+        QPushButton:hover { border: 1px solid #b8d6ff; background: #2f6fb7; }
+        QPushButton:pressed { background: #0d1d38; }
+        QPushButton:disabled { color: #9ca4b2; background: #d8dbe0; }
+        QTabWidget::pane { border: 2px solid #11141c; background: #66738d; }
+        QTabBar::tab {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #808aa0, stop:1 #202637);
+            color: #ffffff;
+            border: 1px solid #05070d;
+            padding: 6px 14px;
+            font-weight: bold;
+        }
+        QTabBar::tab:selected { background: #3d74a7; }
+        QTextEdit, QPlainTextEdit {
+            background: #111723;
+            color: #bfe2ff;
+            border: 2px solid #05070d;
+            selection-background-color: #2f6fb7;
+            font-family: "DejaVu Sans Mono", Consolas, monospace;
+        }
+        QHeaderView::section {
+            background: qlineargradient(x1:0,y1:0,x2:0,y2:1, stop:0 #e7ebf2, stop:1 #8f9aae);
+            color: #111827;
+            border: 1px solid #303846;
+            padding: 3px;
+            font-weight: bold;
+        }
+        QTableWidget {
+            background: #e8ecf3;
+            alternate-background-color: #d7dde8;
+            color: #0b1020;
+            gridline-color: #7d8798;
+            border: 2px solid #11141c;
+        }
+        QTableWidget::item:selected { background: #2f6fb7; color: white; }
+        QCheckBox { color: #ffffff; spacing: 6px; }
+        QProgressBar {
+            border: 1px solid #11141c;
+            background: #d8dbe0;
+            color: #111827;
+            text-align: center;
+        }
+        QProgressBar::chunk { background: #2f6fb7; }
+    )RMX");
+}
+
 bool MainWindowV3::systemctlUser(const QStringList& args, QString* output){
     QProcess p;
     QStringList fullArgs;
@@ -332,7 +435,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* c = new QWidget;
     scroll->setWidget(c);
     auto* l = new QVBoxLayout(c);
-    setWindowTitle("SX/RMX Monitor Qt V3");
+    setWindowTitle("SX/RMX Monitor Qt V3 — RMX-Zentrale Stil");
+    applyRmxCentralStyle();
     sxPanel = new ConnectionPanel("SX", "daemon:///run/user/1000/sxbusd.sock", 19200);
     rmxPanel = new ConnectionPanel("RMX", "daemon:///tmp/sxbusd_rmx.sock", 57600);
     log = new QTextEdit; log->setReadOnly(true);
@@ -408,8 +512,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             t->setColumnWidth(base+2, 86);
         }
         t->setStyleSheet(
-            "QTableWidget { background: white; color: black; gridline-color: #cfcfcf; alternate-background-color: #fafafa; }"
-            "QHeaderView::section { background: #f2f2f2; color: black; padding: 4px; font-weight: 600; }"
+            "QTableWidget { background: #e8ecf3; color: #0b1020; gridline-color: #7d8798; alternate-background-color: #d7dde8; border: 2px solid #11141c; }"
+            "QHeaderView::section { background: #8f9aae; color: #111827; padding: 4px; font-weight: 700; border: 1px solid #303846; }"
         );
         t->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
         t->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
