@@ -16,6 +16,9 @@ private:
     void startRequiredDaemonsIfNeeded();
     void connectBackendFromPanel(BackendKind backend);
     void disconnectBackend(BackendKind backend);
+    void showUsbPortConfigDialog();
+    QStringList scanUsbSerialPorts(QString* details=nullptr) const;
+    bool writeDaemonOverride(BackendKind backend, const QString& serialPath, QString* output=nullptr);
 
     ConnectionPanel* sxPanel{};
     ConnectionPanel* rmxPanel{};

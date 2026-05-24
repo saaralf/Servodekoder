@@ -27,6 +27,14 @@
 #include <QMenuBar>
 #include <QProcess>
 #include <QTimer>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QFormLayout>
+#include <QMessageBox>
+#include <QPlainTextEdit>
 
 class ServoArmWidget : public QWidget {
 public:
@@ -81,6 +89,10 @@ static QString bits8(int v){
 
 static const char* kSxService = "sxbusd2.service";
 static const char* kRmxService = "sxbusd-dual-rmx.service";
+static const char* kSxDaemonBinary = "/opt/programme/selectrix/Servodekoder/software/sx-bus-core/sx_bus_daemon2";
+static const char* kRmxDaemonBinary = "/opt/programme/selectrix/Servodekoder/software/sx-bus-core/sx_bus_daemon_dual";
+static const char* kSxSocket = "/run/user/1000/sxbusd.sock";
+static const char* kRmxSocket = "/tmp/sxbusd_rmx.sock";
 
 bool MainWindowV3::systemctlUser(const QStringList& args, QString* output){
     QProcess p;
@@ -152,7 +164,124 @@ void MainWindowV3::disconnectBackend(BackendKind backend){
     log->append(QString("%1 disconnect OK").arg(backend==BackendKind::SX ? "SX" : "RMX"));
 }
 
+QStringList MainWindowV3::scanUsbSerialPorts(QString* details) const{
+    QStringList ports;
+    QStringList lines;
+    QDir byId("/dev/serial/by-id");
+    const QFileInfoList infos = byId.entryInfoList(QDir::Files | QDir::System | QDir::NoDotAndDotDot, QDir::Name);
+    for(const QFileInfo& fi : infos){
+        const QString path = fi.absoluteFilePath();
+        const QString target = fi.symLinkTarget();
+        ports << path;
+        QString hint = "USB-Serial";
+        const QString low = path.toLower();
+        if(low.contains("rmx") || low.contains("rautenhaus")) hint = "RMX-Kandidat";
+        else if(low.contains("bg02sg7m")) hint = "SX-Kandidat (einziger verbliebener Adapter im aktuellen Test)";
+        else if(low.contains("a50285bi")) hint = "Arduino/Programmer-Kandidat (historisch)";
+        else if(low.contains("ftf8nbf0")) hint = "SX-Kandidat (historisch)";
+        lines << QString("%1 -> %2    [%3]").arg(path, target, hint);
+    }
+    if(ports.isEmpty()){
+        QDir dev("/dev");
+        const QFileInfoList devs = dev.entryInfoList({"ttyUSB*", "ttyACM*"}, QDir::System, QDir::Name);
+        for(const QFileInfo& fi : devs){
+            ports << fi.absoluteFilePath();
+            lines << QString("%1    [Fallback ohne by-id]").arg(fi.absoluteFilePath());
+        }
+    }
+    if(details) *details = lines.isEmpty() ? "Keine ttyUSB/ttyACM-Adapter gefunden." : lines.join('\n');
+    return ports;
+}
+
+bool MainWindowV3::writeDaemonOverride(BackendKind backend, const QString& serialPath, QString* output){
+    const bool sx = backend == BackendKind::SX;
+    const QString service = sx ? kSxService : kRmxService;
+    const QString dirPath = QDir::homePath() + QString("/.config/systemd/user/%1.d").arg(service);
+    QDir().mkpath(dirPath);
+    QFile f(dirPath + "/override.conf");
+    if(!f.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)){
+        if(output) *output = f.errorString();
+        return false;
+    }
+    const QString exec = sx
+        ? QString("%1 %2 19200 %3 slx825_sx0_stream").arg(kSxDaemonBinary, serialPath, kSxSocket)
+        : QString("%1 %2 57600 %3 rmx").arg(kRmxDaemonBinary, serialPath, kRmxSocket);
+    const QString content = QString("[Service]\nExecStart=\nExecStart=%1\n").arg(exec);
+    f.write(content.toUtf8());
+    f.close();
+    QString out;
+    bool ok = systemctlUser({"daemon-reload"}, &out);
+    if(ok) ok = systemctlUser({"restart", service}, &out);
+    if(output) *output = QString("%1\n%2").arg(content.trimmed(), out.trimmed()).trimmed();
+    return ok;
+}
+
+void MainWindowV3::showUsbPortConfigDialog(){
+    QString details;
+    QStringList ports = scanUsbSerialPorts(&details);
+    QDialog dlg(this);
+    dlg.setWindowTitle("SX/RMX USB-Port konfigurieren");
+    auto* layout = new QVBoxLayout(&dlg);
+    auto* form = new QFormLayout;
+    auto* sxCombo = new QComboBox;
+    auto* rmxCombo = new QComboBox;
+    sxCombo->setEditable(true);
+    rmxCombo->setEditable(true);
+    sxCombo->addItems(ports);
+    rmxCombo->addItems(ports);
+    int sxIdx = 0;
+    int rmxIdx = -1;
+    for(int i=0;i<ports.size();++i){
+        const QString low = ports[i].toLower();
+        if(low.contains("bg02sg7m")) sxIdx = i;
+        if(low.contains("rmx") || low.contains("rautenhaus")) rmxIdx = i;
+    }
+    if(sxCombo->count()>0) sxCombo->setCurrentIndex(sxIdx);
+    if(rmxIdx >= 0) rmxCombo->setCurrentIndex(rmxIdx);
+    else rmxCombo->setEditText(ports.isEmpty() ? QString() : QString("nicht angeschlossen / leer lassen"));
+    form->addRow("SX / SLX825 Port:", sxCombo);
+    form->addRow("RMX Port:", rmxCombo);
+    layout->addLayout(form);
+    auto* info = new QPlainTextEdit(details);
+    info->setReadOnly(true);
+    info->setMinimumHeight(130);
+    layout->addWidget(new QLabel("Gefundene Adapter und Vorschläge:"));
+    layout->addWidget(info);
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    auto* rescan = buttons->addButton("Neu suchen", QDialogButtonBox::ActionRole);
+    layout->addWidget(buttons);
+    connect(rescan, &QPushButton::clicked, &dlg, [&]{
+        details.clear(); ports = scanUsbSerialPorts(&details);
+        sxCombo->clear(); rmxCombo->clear(); sxCombo->addItems(ports); rmxCombo->addItems(ports);
+        info->setPlainText(details);
+    });
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+    if(dlg.exec() != QDialog::Accepted) return;
+
+    const QString sxPort = sxCombo->currentText().trimmed();
+    const QString rmxPort = rmxCombo->currentText().trimmed();
+    QString out;
+    if(!sxPort.isEmpty() && !sxPort.contains("nicht angeschlossen")){
+        const bool ok = writeDaemonOverride(BackendKind::SX, sxPort, &out);
+        log->append(QString("SX-Port-Konfig %1: %2").arg(ok?"OK":"FAIL", sxPort));
+        if(!out.isEmpty()) log->append(out);
+    }
+    if(!rmxPort.isEmpty() && !rmxPort.contains("nicht angeschlossen")){
+        const bool ok = writeDaemonOverride(BackendKind::RMX, rmxPort, &out);
+        log->append(QString("RMX-Port-Konfig %1: %2").arg(ok?"OK":"FAIL", rmxPort));
+        if(!out.isEmpty()) log->append(out);
+    } else {
+        log->append("RMX-Port-Konfig übersprungen (nicht angeschlossen/leer).");
+    }
+    QMessageBox::information(this, "USB-Port-Konfig", "Konfiguration geschrieben. Daemon wurde neu geladen/gestartet. Danach bitte neu verbinden oder Menü Verbindung → Alle verbinden nutzen.");
+}
+
 void MainWindowV3::setupDaemonMenu(){
+    auto* configMenu = menuBar()->addMenu("Konfiguration");
+    QAction* usbConfig = configMenu->addAction("SX/RMX USB-Port auswählen...");
+    connect(usbConfig, &QAction::triggered, this, [this]{ showUsbPortConfigDialog(); });
+
     auto* daemonMenu = menuBar()->addMenu("Daemons");
     auto addAction = [this, daemonMenu](const QString& text, const QString& service, const QString& action, const QString& label){
         QAction* a = daemonMenu->addAction(text);

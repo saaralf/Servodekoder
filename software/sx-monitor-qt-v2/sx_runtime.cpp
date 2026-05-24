@@ -93,7 +93,7 @@ int SxRuntime::poll(){
     if(!connected_){
         if(!lastPort_.empty() && lastPort_.rfind("daemon://", 0) == 0){
             auto now = std::chrono::steady_clock::now();
-            if(lastReconnectTry_.time_since_epoch().count() == 0 || now - lastReconnectTry_ > std::chrono::seconds(2)){
+            if(lastReconnectTry_.time_since_epoch().count() == 0 || now - lastReconnectTry_ > std::chrono::seconds(15)){
                 lastReconnectTry_ = now;
                 if(connectPort(lastPort_, lastBaud_)){
                     if(onStatus) onStatus("daemon reconnected");
