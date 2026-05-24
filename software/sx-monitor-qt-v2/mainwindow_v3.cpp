@@ -524,7 +524,9 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
         ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
         if(panel->endpoint().startsWith("daemon://")){
-            if(s.contains("ERR", Qt::CaseInsensitive) || s.contains("track unknown", Qt::CaseInsensitive)) panel->setHardwareWarning(true);
+            if(s.contains("SX_HW ONLINE", Qt::CaseInsensitive)) panel->setHardwareWarning(false);
+            else if(s.contains("SX_HW SEARCHING", Qt::CaseInsensitive) || s.contains("SX_HW OFFLINE", Qt::CaseInsensitive)) panel->setHardwareWarning(true);
+            else if(s.contains("ERR", Qt::CaseInsensitive) || s.contains("track unknown", Qt::CaseInsensitive)) panel->setHardwareWarning(true);
             else if(s.contains("daemon ack: OK", Qt::CaseInsensitive)) panel->setHardwareWarning(false);
         }
     });

@@ -28,6 +28,13 @@ static int g_track_candidate_count = 0;
 static long long g_track_last_commit_ms = 0;
 static long long g_last_track_poll_ms = 0;
 static long long g_last_auto126_ms = 0;
+static long long g_last_hw_probe_ms = 0;
+static int g_hw_online = 0;
+static const char* g_serial_path = NULL;
+static int g_baud = 19200;
+static int g_profile = SX_PROFILE_SLX825_SX0_STREAM;
+
+static long long now_ms(void);
 
 static void on_sig(int s){ (void)s; g_run = 0; }
 
@@ -145,7 +152,14 @@ static void send_snapshot_to_client(int cfd, int bus){
 static void clients_init(){ for(int i=0;i<MAX_CLIENTS;++i) clients[i] = -1; }
 
 static void clients_add(int fd){
-    for(int i=0;i<MAX_CLIENTS;++i){ if(clients[i] < 0){ clients[i]=fd; return; } }
+    for(int i=0;i<MAX_CLIENTS;++i){
+        if(clients[i] < 0){
+            clients[i]=fd;
+            const char* state = (g_ctx && g_ctx->fd >= 0) ? "DAEMON SX_HW ONLINE\n" : "DAEMON SX_HW SEARCHING\n";
+            (void)write(fd, state, strlen(state));
+            return;
+        }
+    }
     close(fd);
 }
 
@@ -156,6 +170,50 @@ static void clients_broadcast(const char* msg){
         if(clients[i] < 0) continue;
         ssize_t wr = write(clients[i], msg, n);
         if(wr < 0){ close(clients[i]); clients[i] = -1; }
+    }
+}
+
+static void broadcast_daemon_status(const char* state){
+    char line[128];
+    snprintf(line, sizeof(line), "DAEMON SX_HW %s\n", state);
+    clients_broadcast(line);
+    fprintf(stderr, "sxbusd %s", line);
+}
+
+static void sx_hw_close(void){
+    if(g_ctx && g_ctx->fd >= 0) sx_close(g_ctx);
+    g_ctx = NULL;
+    if(g_hw_online){
+        g_hw_online = 0;
+        broadcast_daemon_status("OFFLINE");
+    }
+}
+
+static int sx_hw_try_open(sx_bus_ctx* ctx){
+    if(!ctx || !g_serial_path) return -1;
+    if(sx_open(ctx, g_serial_path, g_baud) != 0) return -1;
+    if(sx_set_profile(ctx, g_profile) != 0){ sx_close(ctx); return -1; }
+    if(sx_enable_feedback(ctx) != 0){ sx_close(ctx); return -1; }
+    g_ctx = ctx;
+    g_hw_online = 1;
+    memset(g_have_sx0, 0, sizeof(g_have_sx0));
+    g_last_track = -1;
+    if(sx_force_auto126_bit7() == 0) fprintf(stderr, "sxbusd INFO auto126 init set 0x80\n");
+    else fprintf(stderr, "sxbusd WARN auto126 init set failed errno=%d\n", errno);
+    broadcast_daemon_status("ONLINE");
+    return 0;
+}
+
+static void sx_hw_probe_if_needed(sx_bus_ctx* ctx){
+    if(g_ctx && g_ctx->fd >= 0) return;
+    long long now = now_ms();
+    if((now - g_last_hw_probe_ms) < 1000) return;
+    g_last_hw_probe_ms = now;
+    if(sx_hw_try_open(ctx) == 0) return;
+    static long long last_log_ms = 0;
+    if((now - last_log_ms) >= 5000){
+        fprintf(stderr, "sxbusd SX_HW SEARCH serial=%s baud=%d errno=%d\n", g_serial_path ? g_serial_path : "?", g_baud, errno);
+        last_log_ms = now;
     }
 }
 
@@ -405,50 +463,55 @@ int main(int argc, char** argv){
     signal(SIGPIPE, SIG_IGN);
 
     sx_bus_ctx ctx;
-    if(sx_open(&ctx, serial, baud) != 0){ perror("sx_open"); return 1; }
+    memset(&ctx, 0, sizeof(ctx));
+    ctx.fd = -1;
+    g_serial_path = serial;
+    g_baud = baud;
 
     int profile = SX_PROFILE_SLX825_SX0_STREAM;
     if(strcmp(profile_arg, "slx825_sx0_stream") != 0){
         fprintf(stderr, "sxbusd WARN unknown profile '%s', fallback to slx825_sx0_stream\n", profile_arg);
     }
-    if(sx_set_profile(&ctx, profile) != 0){
-        fprintf(stderr, "sxbusd ERR profile set failed: %s\n", sx_profile_name(profile));
-        sx_close(&ctx);
-        return 1;
-    }
-
-    if(sx_enable_feedback(&ctx) != 0){ perror("sx_enable_feedback"); sx_close(&ctx); return 1; }
-    g_ctx = &ctx;
-    if(sx_force_auto126_bit7() == 0){
-        fprintf(stderr, "sxbusd INFO auto126 init set 0x80\n");
-    } else {
-        fprintf(stderr, "sxbusd WARN auto126 init set failed errno=%d\n", errno);
-    }
+    g_profile = profile;
 
     int srv = make_server(sock);
-    if(srv < 0){ perror("socket_server"); sx_close(&ctx); return 1; }
+    if(srv < 0){ perror("socket_server"); return 1; }
 
     clients_init();
-    printf("sx_bus_daemon serial=%s baud=%d sock=%s profile=%s init=FE_A0 power_addr=127 bus_switch=off\n",
-           serial, baud, sock, sx_profile_name(ctx.profile));
+    printf("sx_bus_daemon serial=%s baud=%d sock=%s profile=%s init=FE_A0 power_addr=127 bus_switch=off auto_probe=on\n",
+           serial, baud, sock, sx_profile_name(profile));
+
+    if(sx_hw_try_open(&ctx) != 0){
+        fprintf(stderr, "sxbusd SX_HW SEARCH initial serial=%s baud=%d errno=%d\n", serial, baud, errno);
+    }
 
     while(g_run){
         int cfd = accept(srv, NULL, NULL);
         if(cfd >= 0) clients_add(cfd);
         for(int i=0;i<MAX_CLIENTS;++i) if(clients[i]>=0) handle_client_cmd(i);
-        int r = sx_poll(&ctx, on_frame, on_track, NULL);
-        if(r < 0){ perror("sx_poll"); break; }
-        periodic_track_poll();
-        long long now = now_ms();
-        if((now - g_last_auto126_ms) >= 1000){
-            (void)sx_force_auto126_bit7();
-            g_last_auto126_ms = now;
+        sx_hw_probe_if_needed(&ctx);
+        if(g_ctx && g_ctx->fd >= 0){
+            int r = sx_poll(&ctx, on_frame, on_track, NULL);
+            if(r < 0){
+                fprintf(stderr, "sxbusd SX_HW LOST sx_poll errno=%d\n", errno);
+                sx_hw_close();
+            } else {
+                periodic_track_poll();
+                long long now = now_ms();
+                if((now - g_last_auto126_ms) >= 1000){
+                    if(sx_force_auto126_bit7() != 0){
+                        fprintf(stderr, "sxbusd SX_HW LOST auto126 errno=%d\n", errno);
+                        sx_hw_close();
+                    }
+                    g_last_auto126_ms = now;
+                }
+            }
         }
         usleep(5000);
     }
 
     close(srv);
     unlink(sock);
-    sx_close(&ctx);
+    sx_hw_close();
     return 0;
 }
