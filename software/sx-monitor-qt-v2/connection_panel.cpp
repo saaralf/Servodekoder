@@ -27,7 +27,9 @@ QString ConnectionPanel::endpoint() const { return endpointEdit->text().trimmed(
 int ConnectionPanel::baud() const { return baudEdit->text().toInt(); }
 void ConnectionPanel::setConnected(bool on){
     statusLbl->setText(on?"online":"offline");
+    statusLbl->setStyleSheet(on ? "QLabel{color:#0a7f20; font-weight:600;}" : "QLabel{color:#8a0000; font-weight:600;}");
     connectBtn->setEnabled(!on);
+    connectBtn->setStyleSheet(on ? "QPushButton{background:#2fa84f; color:white; font-weight:600;}" : "");
     disconnectBtn->setEnabled(on);
 }
 void ConnectionPanel::setTrackState(int t){

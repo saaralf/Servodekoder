@@ -21,6 +21,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QCoreApplication>
+#include <QScrollArea>
 
 class ServoArmWidget : public QWidget {
 public:
@@ -74,10 +75,14 @@ static QString bits8(int v){
 }
 
 MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
-    auto* c = new QWidget; setCentralWidget(c);
+    auto* scroll = new QScrollArea;
+    scroll->setWidgetResizable(true);
+    setCentralWidget(scroll);
+    auto* c = new QWidget;
+    scroll->setWidget(c);
     auto* l = new QVBoxLayout(c);
     setWindowTitle("SX/RMX Monitor Qt V3");
-    sxPanel = new ConnectionPanel("SX", "daemon:///tmp/sxbusd_sx.sock", 19200);
+    sxPanel = new ConnectionPanel("SX", "daemon:///run/user/1000/sxbusd.sock", 19200);
     rmxPanel = new ConnectionPanel("RMX", "daemon:///tmp/sxbusd_rmx.sock", 57600);
     log = new QTextEdit; log->setReadOnly(true);
 
@@ -243,7 +248,11 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         l->setAlignment(Qt::AlignCenter);
         return l;
     };
-    for(int c=0;c<8;++c) grid->addWidget(mkHdr(c), 0, c);
+    for(int c=0;c<8;++c){
+        auto* hdr = mkHdr(c);
+        visualInfo[c] = hdr;
+        grid->addWidget(hdr, 0, c);
+    }
 
     auto *addrBline = new QWidget;
     auto *addrBL = new QHBoxLayout(addrBline);
@@ -253,7 +262,11 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     addrBL->addWidget(visualAddrB);
     addrBL->addStretch(1);
     grid->addWidget(addrBline, 2, 0, 1, 8);
-    for(int c=0;c<8;++c) grid->addWidget(mkHdr(8+c), 3, c);
+    for(int c=0;c<8;++c){
+        auto* hdr = mkHdr(8+c);
+        visualInfo[8+c] = hdr;
+        grid->addWidget(hdr, 3, c);
+    }
 
     auto *limitLine = new QWidget;
     auto *limitL = new QHBoxLayout(limitLine);
@@ -268,11 +281,15 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     for(int s=0; s<16; ++s){
         auto *box = new QGroupBox(QString("Servo %1").arg(s+1));
         auto *bl = new QVBoxLayout(box);
+        bl->setContentsMargins(4,4,4,4);
+        bl->setSpacing(3);
         auto *arm = new ServoArmWidget();
         visualArm[s] = arm;
         bl->addWidget(arm, 1);
 
         auto *row1 = new QHBoxLayout;
+        row1->setContentsMargins(0,0,0,0);
+        row1->setSpacing(2);
         auto *bMinus2 = new QPushButton("--");
         auto *bMinus = new QPushButton("-");
         auto *bMid = new QPushButton("Mitte");
@@ -284,17 +301,19 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         bl->addLayout(row1);
 
         auto *row2 = new QHBoxLayout;
+        row2->setContentsMargins(0,0,0,0);
+        row2->setSpacing(2);
         auto *bL = new QPushButton("Links speichern");
         auto *bR = new QPushButton("Rechts speichern");
         row2->addWidget(bL); row2->addWidget(bR);
         bl->addLayout(row2);
 
         auto sendWizard = [this,beBox,busBox](int adr, int val){ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); return ctrl.send(b,bus,adr,val); };
-        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,10); sendWizard(13,1); log->append(QString("V2 S%1 --").arg(s+1)); });
-        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); log->append(QString("V2 S%1 -").arg(s+1)); });
-        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); log->append(QString("V2 S%1 +").arg(s+1)); });
-        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(12,10); sendWizard(13,2); log->append(QString("V2 S%1 ++").arg(s+1)); });
-        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(13,3); log->append(QString("V2 S%1 Mitte").arg(s+1)); });
+        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(-40); sendWizard(11,s); sendWizard(12,10); sendWizard(13,1); log->append(QString("V2 S%1 --").arg(s+1)); });
+        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(-20); sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); log->append(QString("V2 S%1 -").arg(s+1)); });
+        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(20); sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); log->append(QString("V2 S%1 +").arg(s+1)); });
+        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(40); sendWizard(11,s); sendWizard(12,10); sendWizard(13,2); log->append(QString("V2 S%1 ++").arg(s+1)); });
+        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(0); sendWizard(11,s); sendWizard(13,3); log->append(QString("V2 S%1 Mitte").arg(s+1)); });
         connect(bL,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,1); log->append(QString("V2 S%1 Links speichern").arg(s+1)); });
         connect(bR,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,2); log->append(QString("V2 S%1 Rechts speichern").arg(s+1)); });
 
@@ -530,5 +549,5 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
 
     adjustSize();
     resize(sizeHint());
-    setMinimumSize(sizeHint());
+    setMinimumSize(900, 650);
 }
