@@ -513,6 +513,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* servoL = new QVBoxLayout(servoTab);
     auto* visualL = new QVBoxLayout(visualTab);
     auto* sxBusSel = new QComboBox; sxBusSel->addItems({"SX0","SX1"});
+    auto* sxBitOrderSwitch = new QCheckBox("Bitreihenfolge umkehren");
+    sxBitOrderSwitch->setChecked(false); // false: links=Bit7 (klassisch)
     auto* rmxBusSel = new QComboBox; rmxBusSel->addItems({"RMX0","RMX1"});
     auto* sxTable = new QTableWidget(28,12);
     auto* rmxTable = new QTableWidget(28,12);
@@ -570,7 +572,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         log->append(QString("BITSEND SX b%1 a%2 v%3 -> %4").arg(bus).arg(adr).arg(out).arg(ok?"OK":"FAIL"));
     };
 
-    auto createBitButtonsCell = [this, sxBusSel, sxTable](int adr, int value){
+    auto createBitButtonsCell = [this, sxBusSel, sxTable, sxBitOrderSwitch](int adr, int value){
         auto* host = new QWidget;
         auto* hl = new QHBoxLayout(host);
         hl->setContentsMargins(1,1,1,1);
@@ -587,9 +589,10 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 ? "QToolButton{min-width:16px; min-height:18px; font-weight:700; color:#08120a; background:#22c55e; border:1px solid #0b3d17; border-radius:2px;}"
                 : "QToolButton{min-width:16px; min-height:18px; font-weight:700; color:#f8fafc; background:#475569; border:1px solid #1e293b; border-radius:2px;}");
             hl->addWidget(b);
-            QObject::connect(b, &QToolButton::clicked, host, [this, sxBusSel, sxTable, b]{
+            QObject::connect(b, &QToolButton::clicked, host, [this, sxBusSel, sxTable, sxBitOrderSwitch, b]{
                 int adr = b->property("adr").toInt();
-                int bit = b->property("bit").toInt();
+                int shownBit = b->property("bit").toInt();
+                int bit = (sxBitOrderSwitch && sxBitOrderSwitch->isChecked()) ? (7 - shownBit) : shownBit;
                 if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)){
                     log->append(QString("BITSEND BLOCKIERT a%1 (reserviert)").arg(adr));
                     return;
@@ -649,9 +652,15 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         t->setMinimumHeight(tableH);
         t->setMaximumHeight(tableH);
     }
+    auto* sxTopRow = new QHBoxLayout;
+    sxTopRow->setContentsMargins(0,0,0,0);
+    sxTopRow->addWidget(sxBusSel);
+    sxTopRow->addSpacing(8);
+    sxTopRow->addWidget(sxBitOrderSwitch);
+    sxTopRow->addStretch(1);
+    sxTabL->addLayout(sxTopRow);
     sxTabL->addWidget(sxTable);
     rmxTabL->addWidget(rmxTable);
-    sxTabL->insertWidget(0, sxBusSel);
     rmxTabL->insertWidget(0, rmxBusSel);
     tabs->addTab(sxTab, "SX Monitor");
     tabs->addTab(rmxTab, "RMX Monitor");
@@ -847,17 +856,30 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     for(auto &b:*sxVals) b.fill(-1);
     for(auto &b:*rmxVals) b.fill(-1);
     auto repaintTable = [sxTable,rmxTable,sxBusSel,rmxBusSel,sxVals,rmxVals](BackendKind bk){
-        auto* t = (bk==BackendKind::SX)?sxTable:rmxTable;
+        QTableWidget* t = (bk==BackendKind::SX)?sxTable:rmxTable;
         int bus = (bk==BackendKind::SX)?sxBusSel->currentIndex():rmxBusSel->currentIndex();
         auto& vals = (bk==BackendKind::SX)?*sxVals:*rmxVals;
-        for(int adr=0; adr<=111; ++adr){
-            int row=adr%28, blk=adr/28, base=blk*3;
+        for(int adr=0; adr<112; ++adr){
+            int row=adr%28, base=(adr/28)*3;
             int v=vals[bus][adr];
             t->item(row,base+1)->setText(v<0?"-":QString::number(v));
             t->item(row,base+2)->setText(v<0?"--------":bits8(v));
         }
     };
-    connect(sxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable](int){ repaintTable(BackendKind::SX); });
+    auto rebuildSxBitWidgets = [sxTable, createBitButtonsCell, sxVals, sxBusSel](){
+        int selBus = sxBusSel->currentIndex();
+        for(int adr=0; adr<112; ++adr){
+            int row = adr % 28;
+            int blk = adr / 28;
+            int base = blk * 3;
+            int v = (*sxVals)[selBus][adr];
+            if(v < 0) v = 0;
+            sxTable->setCellWidget(row, base+2, createBitButtonsCell(adr, v));
+        }
+    };
+    connect(sxBitOrderSwitch, &QCheckBox::toggled, this, [rebuildSxBitWidgets](bool){ rebuildSxBitWidgets(); });
+    connect(sxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable,rebuildSxBitWidgets](int){ repaintTable(BackendKind::SX); rebuildSxBitWidgets(); });
+
     connect(rmxBusSel, qOverload<int>(&QComboBox::currentIndexChanged), this, [repaintTable](int){ repaintTable(BackendKind::RMX); });
 
     auto sendWizard = [this,beBox,busBox](int adr, int val){
