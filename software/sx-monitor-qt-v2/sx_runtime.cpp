@@ -28,8 +28,9 @@ bool SxRuntime::connectPort(const std::string& port, int baud){
     lastBaud_ = baud;
     disconnectPort();
     const std::string prefix = "daemon://";
-    if(port.rfind(prefix, 0) == 0){
+        if(port.rfind(prefix, 0) == 0){
         std::string sockPath = port.substr(prefix.size());
+        if(onStatus) onStatus(std::string("daemon connect try: ") + sockPath);
         int fd = socket(AF_UNIX, SOCK_STREAM, 0);
         if(fd < 0){ if(onStatus) onStatus("daemon socket create failed"); return false; }
         sockaddr_un addr{};
@@ -45,7 +46,7 @@ bool SxRuntime::connectPort(const std::string& port, int baud){
         daemonFd_ = fd;
         daemonMode_ = true;
         connected_ = true;
-        if(onStatus) onStatus("runtime connected (daemon)");
+        if(onStatus) onStatus(std::string("runtime connected (daemon): ") + sockPath);
         const char* cmdTrack = "GET_TRACK\n";
         ssize_t wr1 = ::write(daemonFd_, cmdTrack, strlen(cmdTrack));
         if(wr1 <= 0 && onStatus) onStatus("daemon init GET_TRACK failed");
@@ -152,14 +153,18 @@ int SxRuntime::pollDaemon(){
         std::string line = rxBuf_.substr(pos, nl-pos);
         int bus=0, adr=0, data=0, tr=0;
         if(sscanf(line.c_str(), "FRAME %d %d %d", &bus, &adr, &data) == 3){
+            if(onStatus && (adr == 10 || adr == 11 || adr == 12 || adr == 13 || adr == 14 || adr == 126 || adr == 127)) onStatus(std::string("daemon rx: ") + line);
             if(onFrame) onFrame(bus, adr, data);
         } else if(sscanf(line.c_str(), "TRACK %d", &tr) == 1){
+            if(onStatus) onStatus(std::string("daemon rx: ") + line);
             if(tr >= 0 && onTrack) onTrack(tr);
             else if(tr < 0 && onStatus) onStatus("track unknown (-1), wait for ADR127 stream");
         } else if(line == "OK") {
             if(onStatus) onStatus("daemon ack: OK");
         } else if(line.rfind("ERR", 0) == 0) {
             if(onStatus) onStatus(std::string("daemon ack: ") + line);
+        } else if(!line.empty()) {
+            if(onStatus) onStatus(std::string("daemon rx: ") + line);
         }
         pos = nl + 1;
     }
@@ -172,6 +177,7 @@ bool SxRuntime::send(int bus, int adr, int val){
         if(!connected_ || daemonFd_ < 0) return false;
         char cmd[64];
         snprintf(cmd, sizeof(cmd), "WRITE %d %d %d\n", bus, adr, val);
+        if(onStatus) onStatus(std::string("daemon tx: ") + cmd);
         ssize_t wr = ::write(daemonFd_, cmd, strlen(cmd));
         if(wr <= 0){ if(onStatus) onStatus("daemon write failed"); return false; }
         return true;
@@ -190,6 +196,7 @@ bool SxRuntime::readAdr(int bus, int adr){
         if(!connected_ || daemonFd_ < 0) return false;
         char cmd[64];
         snprintf(cmd, sizeof(cmd), "READADR %d %d\n", bus, adr);
+        if(onStatus) onStatus(std::string("daemon tx: ") + cmd);
         ssize_t wr = ::write(daemonFd_, cmd, strlen(cmd));
         if(wr <= 0){ if(onStatus) onStatus("daemon read request failed"); return false; }
         return true;

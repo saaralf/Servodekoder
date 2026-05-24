@@ -239,6 +239,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     grid->setVerticalSpacing(4);
     std::vector<QLabel*> visualInfo(16, nullptr);
     std::vector<ServoArmWidget*> visualArm(16, nullptr);
+    auto visualAngle = std::make_shared<std::array<int,16>>();
+    visualAngle->fill(0);
 
     auto mkHdr = [visualBitOrder,visualAddrA,visualAddrB](int servoIdx)->QLabel*{
         int bit = (servoIdx % 8) + 1;
@@ -309,11 +311,18 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         bl->addLayout(row2);
 
         auto sendWizard = [this,beBox,busBox](int adr, int val){ BackendKind b=(beBox->currentText()=="SX")?BackendKind::SX:BackendKind::RMX; int bus=busBox->currentText().toInt(); return ctrl.send(b,bus,adr,val); };
-        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(-40); sendWizard(11,s); sendWizard(12,10); sendWizard(13,1); log->append(QString("V2 S%1 --").arg(s+1)); });
-        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(-20); sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); log->append(QString("V2 S%1 -").arg(s+1)); });
-        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(20); sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); log->append(QString("V2 S%1 +").arg(s+1)); });
-        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(40); sendWizard(11,s); sendWizard(12,10); sendWizard(13,2); log->append(QString("V2 S%1 ++").arg(s+1)); });
-        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard,arm](){ arm->setAngleDeg(0); sendWizard(11,s); sendWizard(13,3); log->append(QString("V2 S%1 Mitte").arg(s+1)); });
+        auto stepArm = [visualAngle,visualLimitSpin,arm,s](int delta){
+            int lim = visualLimitSpin->value();
+            int next = qBound(-lim, (*visualAngle)[s] + delta, lim);
+            (*visualAngle)[s] = next;
+            arm->setAngleDeg(next);
+            return next;
+        };
+        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(-5); sendWizard(11,s); sendWizard(12,5); sendWizard(13,1); log->append(QString("V2 S%1 -- Winkel %2").arg(s+1).arg(a)); });
+        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(-1); sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); log->append(QString("V2 S%1 - Winkel %2").arg(s+1).arg(a)); });
+        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(1); sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); log->append(QString("V2 S%1 + Winkel %2").arg(s+1).arg(a)); });
+        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(5); sendWizard(11,s); sendWizard(12,5); sendWizard(13,2); log->append(QString("V2 S%1 ++ Winkel %2").arg(s+1).arg(a)); });
+        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard,arm,visualAngle](){ (*visualAngle)[s]=0; arm->setAngleDeg(0); sendWizard(11,s); sendWizard(13,3); log->append(QString("V2 S%1 Mitte Winkel 0").arg(s+1)); });
         connect(bL,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,1); log->append(QString("V2 S%1 Links speichern").arg(s+1)); });
         connect(bR,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,2); log->append(QString("V2 S%1 Rechts speichern").arg(s+1)); });
 
@@ -510,7 +519,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
         log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
     });
-    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel,visualAddrA,visualAddrB,visualBitOrder,visualArm](BackendKind b,int bus,int adr,int val){
+    connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel,visualAddrA,visualAddrB,visualBitOrder,visualArm,visualAngle,visualLimitSpin](BackendKind b,int bus,int adr,int val){
         if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
         log->append(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
@@ -541,7 +550,9 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 int bit = (s%8)+1;
                 int bitIdx = visualBitOrder->isChecked() ? (bit-1) : (8-bit);
                 int on = (val >> bitIdx) & 0x1;
-                int angle = on ? 40 : -40;
+                int lim = visualLimitSpin->value();
+                int angle = on ? lim : -lim;
+                (*visualAngle)[s] = angle;
                 if(visualArm[s]) visualArm[s]->setAngleDeg(angle);
             }
         }
