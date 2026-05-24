@@ -1,6 +1,11 @@
 # QA-Anleitung: SX-Monitor Qt V3 – Servo-Bildansicht V2
 
 Ziel: prüfen, ob der V3-Reiter „Servo-Bildansicht V2“ den originalen V2-Servo-Bildreiter korrekt sichtbar macht und die grundlegende Bedienung sicher funktioniert.
+Ergebnis: ja sieht schon mal gut aus. Wass auffällt: Die abstände der Buttons etwas hoch. Vielleicht etwas schöner machen, gibts da nicht design regeln?
+"Bits links->rechts..." ändert die bitreihenfolge nicht....
+
+Buttons schreiben ins log bewegen den Servoarm nicht... 
+Grafik: Servoarm ist korrekt mitting senkrecht auf dem Servo drauf, dass passt.
 
 Stand: V3-Port, Fokus auf Bild-Reiter mit 16 Servos, Original-Servoarm-Assets und V2-ähnlicher Bedienstruktur.
 
@@ -26,6 +31,8 @@ Programm starten:
 
 ```bash
 ./build/sx_monitor_qt_v3
+
+##1 OK
 ```
 
 Hinweis:
@@ -35,15 +42,19 @@ Hinweis:
 ## 2. Sichtprüfung Hauptfenster
 
 Prüfen:
-- Fenster startet ohne Absturz.
-- Tabs sind sichtbar.
-- Kein Zwang zum Scrollen im Hauptbereich, soweit Bildschirmhöhe ausreicht.
-- Tab „Servo-Bildansicht V2“ ist vorhanden.
+- Fenster startet ohne Absturz. OK
+- Tabs sind sichtbar. OK
+- Kein Zwang zum Scrollen im Hauptbereich, soweit Bildschirmhöhe ausreicht. ok
+- Tab „Servo-Bildansicht V2“ ist vorhanden. OK
+
+Fenster lässt sich nur größer scallieren, kleiner als die startgröße nicht möglich... Ziel: Fenster soll alle Fensterfunktionen bieten, die üblich sind. Scollbalken dürfen dann auch erscheinen, wenn Fenster kleiner wird.... Eine Standartgröße soll keine Scrollbalken haben (ist derzeit ok) 
 
 Bewertung:
 - PASS: Tab sichtbar, UI stabil, keine Fehlermeldung.
 - FAIL: Tab fehlt, Fenster startet nicht, Layout unbenutzbar.
 - N/A: Bildschirm zu klein; dann Beobachtung notieren.
+
+##2 PASS
 
 ## 3. Servo-Bildansicht öffnen
 
@@ -51,24 +62,25 @@ Aktion:
 - Tab „Servo-Bildansicht V2“ öffnen.
 
 Erwartung:
-- 16 Servo-Kacheln sichtbar.
-- Obere Reihe: Servo 1 bis Servo 8.
-- Untere Reihe: Servo 9 bis Servo 16.
-- Zwischen den Reihen ist die Adresszeile für Adresse 2 sichtbar.
-- Servo-Grafik mit blauem Body und Servoarm wird angezeigt.
+- 16 Servo-Kacheln sichtbar. OK
+- Obere Reihe: Servo 1 bis Servo 8. OK
+- Untere Reihe: Servo 9 bis Servo 16. OK
+- Zwischen den Reihen ist die Adresszeile für Adresse 2 sichtbar. OK
+- Servo-Grafik mit blauem Body und Servoarm wird angezeigt. OK
 
 Bewertung:
 - PASS: 16 Kacheln und Servo-Grafiken sichtbar.
 - FAIL: Grafiken fehlen, Kacheln fehlen oder Programm stürzt ab.
 - N/A: Wenn Assets nicht gefunden werden, Pfad notieren.
+##3 PASS
 
 ## 4. Asset-Prüfung
 
-Prüfen, ob diese Dateien vorhanden sind:
+Prüfen, ob diese Dateien vorhanden sind: OK
 
 ```bash
-ls -l /opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/assets/servo_body_blue.png
-ls -l /opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/assets/servo_arm_new.png
+ls -l /opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/assets/servo_body_blue.png 
+ls -l /opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/assets/servo_arm_new.png 
 ```
 
 Erwartung:
@@ -77,6 +89,8 @@ Erwartung:
 Bewertung:
 - PASS: beide PNG-Dateien vorhanden.
 - FAIL: eine oder beide Dateien fehlen.
+
+##4 PASS
 
 ## 5. Layout-Vergleich gegen V2
 
@@ -106,6 +120,8 @@ Bewertung:
 - FAIL: zentrale V2-Bedienelemente fehlen.
 - N/A: Wenn V2 nicht gestartet werden kann, Screenshot/Beobachtung von V3 notieren.
 
+##5 PASS
+
 ## 6. Adressfelder prüfen
 
 Aktionen:
@@ -114,13 +130,15 @@ Aktionen:
 3. Checkbox „Bits links->rechts (Bit1 links)“ umschalten.
 
 Erwartung:
-- Header-/Adress-/Bit-Anzeigen ändern sich passend.
-- Programm bleibt stabil.
-- Keine ungewollte Busübertragung nur durch Ändern der Anzeige.
+- Header-/Adress-/Bit-Anzeigen ändern sich passend. FAIL keine änderung
+- Programm bleibt stabil. OK
+- Keine ungewollte Busübertragung nur durch Ändern der Anzeige. N/A nicht prüfbar, da keine Hardware angeschlossen
 
 Bewertung:
 - PASS: Anzeige aktualisiert sich korrekt.
 - FAIL: Anzeige bleibt falsch oder UI hängt.
+
+##6 FAIL
 
 ## 7. Button-Bedienung ohne Hardware
 
@@ -134,13 +152,15 @@ Aktionen im Servo-Bildtab, z. B. Servo 1:
 - `Rechts speichern`
 
 Erwartung ohne Hardware:
-- Programm stürzt nicht ab.
-- Log zeigt passende V2-Sx-Aktion, z. B. `V2 S1 Mitte`.
-- Bei nicht verbundenem Backend darf Senden fehlschlagen, aber UI muss stabil bleiben.
+- Programm stürzt nicht ab. OK
+- Log zeigt passende V2-Sx-Aktion, z. B. `V2 S1 Mitte`. OK
+- Bei nicht verbundenem Backend darf Senden fehlschlagen, aber UI muss stabil bleiben. OK
 
 Bewertung:
 - PASS: Klicks erzeugen Logeinträge, keine Abstürze.
 - FAIL: Absturz, Freeze oder falscher Servo-Index.
+
+##7 PASS
 
 ## 8. Button-Bedienung mit SX-Daemon/Hardware
 
@@ -150,10 +170,23 @@ Voraussetzung:
 - Für aktuelles Zielsetup bevorzugt SX/SX0-only verwenden.
 
 Aktionen:
-1. Verbindung herstellen.
-2. Servo-Bildtab öffnen.
-3. Bei Servo 1 `Mitte` klicken.
+1. Verbindung herstellen. ich weiss nicht ob ok Wie stelle ich sicher, dass die Verbindung mit dem daemon ok ist. Im Log steht zwar SX connect OK aber ich bekomme keine Meldung über den Daemon (bitte den daemon soll eine Meldung schicken die dann ins log geschriben wird) Button soll dann grün werden, wenn erfolgraich connected. 
+2. Servo-Bildtab öffnen. OK
+3. Bei Servo 1 `Mitte` klicken. ok 
 4. Danach `-`, `+`, `Links speichern`, `Rechts speichern` testen.
+
+Ergebnis: V2 S1 Mitte
+SX: daemon ack: ERR write
+SX: daemon ack: ERR write
+V2 S1 Mitte
+SX: daemon ack: ERR write
+SX: daemon ack: ERR write
+V2 S1 Rechts speichern
+SX: daemon ack: ERR write
+SX: daemon ack: ERR write
+V2 S1 Links speichern
+SX: daemon ack: ERR write
+SX: daemon ack: ERR write
 
 Erwartung:
 - V3 sendet über den gewählten Backend/Bus-Pfad.
@@ -164,6 +197,8 @@ Bewertung:
 - PASS: Decoder reagiert plausibel, Log passt.
 - FAIL: falscher Bus, falscher Servo, keine Reaktion trotz korrekter Verbindung.
 - N/A: Wenn Hardware nicht angeschlossen ist.
+
+##8 Pass mit Hinweisen
 
 ## 9. Live-RX/Servoarm prüfen
 

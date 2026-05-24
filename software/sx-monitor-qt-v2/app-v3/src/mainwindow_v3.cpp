@@ -39,6 +39,9 @@
 #include <QPlainTextEdit>
 #include <QToolButton>
 #include <array>
+#include <QDateTime>
+#include <QTextStream>
+#include <QRegularExpression>
 
 class ServoArmWidget : public QWidget {
 public:
@@ -98,12 +101,31 @@ static const char* kRmxDaemonBinary = "/opt/programme/selectrix/Servodekoder/sof
 static const char* kSxSocket = "/run/user/1000/sxbusd.sock";
 static const char* kRmxSocket = "/tmp/sxbusd_rmx.sock";
 
+static QString v3Ts(){
+    return QDateTime::currentDateTime().toString("yyyy-MM-ddThh:mm:ss.zzz");
+}
+
 static bool hasValidOverridePort(const QString& service){
     const QString path = QDir::homePath() + QString("/.config/systemd/user/%1.d/override.conf").arg(service);
     QFile f(path);
     if(!f.open(QIODevice::ReadOnly | QIODevice::Text)) return false;
     const QString txt = QString::fromUtf8(f.readAll());
     return txt.contains("/dev/serial/by-id/") || txt.contains("/dev/ttyUSB") || txt.contains("/dev/ttyACM");
+}
+
+static QString readOverridePort(const QString& service){
+    const QString path = QDir::homePath() + QString("/.config/systemd/user/%1.d/override.conf").arg(service);
+    QFile f(path);
+    if(!f.open(QIODevice::ReadOnly | QIODevice::Text)) return QString();
+    const QString txt = QString::fromUtf8(f.readAll());
+    QRegularExpression re(QStringLiteral("ExecStart=.*\\s(/dev/(?:serial/by-id/\\S+|ttyUSB\\d+|ttyACM\\d+))\\s"));
+    auto m = re.match(txt);
+    return m.hasMatch() ? m.captured(1).trimmed() : QString();
+}
+
+static bool looksLikeArduinoAdapter(const QString& p){
+    const QString low = p.toLower();
+    return low.contains("arduino") || low.contains("a50285bi");
 }
 
 void MainWindowV3::applyRmxCentralStyle(){
@@ -238,7 +260,7 @@ void MainWindowV3::daemonServiceAction(const QString& service, const QString& ac
     QString out;
     const bool ok = systemctlUser({action, service}, &out);
     if(log){
-        log->append(QString("Daemon %1 %2: %3%4")
+        appendLog(QString("Daemon %1 %2: %3%4")
             .arg(label, action, ok ? "OK" : "FAIL", out.isEmpty() ? QString() : QString(" — ") + out));
     }
 }
@@ -250,13 +272,13 @@ void MainWindowV3::startRequiredDaemonsIfNeeded(){
     };
     for(const auto& item : items){
         if(item.requirePort && !hasValidOverridePort(item.service)){
-            if(log) log->append(QString("Daemon %1 übersprungen — kein USB-Port konfiguriert (%2)").arg(item.label, item.service));
+            if(log) appendLog(QString("Daemon %1 übersprungen — kein USB-Port konfiguriert (%2)").arg(item.label, item.service));
             continue;
         }
         if(serviceActive(item.service)){
-            if(log) log->append(QString("Daemon %1 läuft bereits (%2)").arg(item.label, item.service));
+            if(log) appendLog(QString("Daemon %1 läuft bereits (%2)").arg(item.label, item.service));
         } else {
-            if(log) log->append(QString("Daemon %1 läuft nicht — starte %2").arg(item.label, item.service));
+            if(log) appendLog(QString("Daemon %1 läuft nicht — starte %2").arg(item.label, item.service));
             daemonServiceAction(item.service, "start", item.label);
         }
     }
@@ -268,24 +290,24 @@ void MainWindowV3::connectBackendFromPanel(BackendKind backend){
     if(panel->endpoint().startsWith("daemon://")){
         const char* service = backend==BackendKind::SX ? kSxService : kRmxService;
         if(!hasValidOverridePort(service)){
-            log->append(QString("%1 connect übersprungen — kein USB-Port konfiguriert. Bitte Konfiguration → SX/RMX USB-Port auswählen...").arg(label));
+            appendLog(QString("%1 connect übersprungen — kein USB-Port konfiguriert. Bitte Konfiguration → SX/RMX USB-Port auswählen...").arg(label));
             return;
         }
         daemonServiceAction(service, "start", label);
     }
     bool ok = ctrl.connectBackend(backend, panel->endpoint(), panel->baud());
-    log->append(QString("%1 connect %2").arg(label, ok?"OK":"FAIL"));
+    appendLog(QString("%1 connect %2").arg(label, ok?"OK":"FAIL"));
     if(!ok && panel->endpoint().startsWith("daemon://")){
         QTimer::singleShot(1000, this, [this, backend, panel, label]{
             bool retryOk = ctrl.connectBackend(backend, panel->endpoint(), panel->baud());
-            log->append(QString("%1 connect retry nach Daemon-Start %2").arg(label, retryOk?"OK":"FAIL"));
+            appendLog(QString("%1 connect retry nach Daemon-Start %2").arg(label, retryOk?"OK":"FAIL"));
         });
     }
 }
 
 void MainWindowV3::disconnectBackend(BackendKind backend){
     ctrl.disconnectBackend(backend);
-    log->append(QString("%1 disconnect OK").arg(backend==BackendKind::SX ? "SX" : "RMX"));
+    appendLog(QString("%1 disconnect OK").arg(backend==BackendKind::SX ? "SX" : "RMX"));
 }
 
 QStringList MainWindowV3::scanUsbSerialPorts(QString* details) const{
@@ -355,10 +377,19 @@ void MainWindowV3::showUsbPortConfigDialog(){
     rmxCombo->addItems(ports);
     int sxIdx = 0;
     int rmxIdx = -1;
+    const QString sxConfigured = readOverridePort(kSxService);
+    const QString rmxConfigured = readOverridePort(kRmxService);
     for(int i=0;i<ports.size();++i){
         const QString low = ports[i].toLower();
-        if(low.contains("bg02sg7m")) sxIdx = i;
-        if(low.contains("rmx") || low.contains("rautenhaus")) rmxIdx = i;
+        if(!sxConfigured.isEmpty() && ports[i] == sxConfigured) sxIdx = i;
+        else if(low.contains("bg02sg7m")) sxIdx = i;
+        if(!rmxConfigured.isEmpty() && ports[i] == rmxConfigured) rmxIdx = i;
+        else if(low.contains("rmx") || low.contains("rautenhaus")) rmxIdx = i;
+    }
+    if(sxConfigured.isEmpty() && !ports.isEmpty() && looksLikeArduinoAdapter(ports[sxIdx])){
+        for(int i=0;i<ports.size();++i){
+            if(!looksLikeArduinoAdapter(ports[i])){ sxIdx = i; break; }
+        }
     }
     if(sxCombo->count()>0) sxCombo->setCurrentIndex(sxIdx);
     if(rmxIdx >= 0) rmxCombo->setCurrentIndex(rmxIdx);
@@ -388,15 +419,15 @@ void MainWindowV3::showUsbPortConfigDialog(){
     QString out;
     if(!sxPort.isEmpty() && !sxPort.contains("nicht angeschlossen")){
         const bool ok = writeDaemonOverride(BackendKind::SX, sxPort, &out);
-        log->append(QString("SX-Port-Konfig %1: %2").arg(ok?"OK":"FAIL", sxPort));
-        if(!out.isEmpty()) log->append(out);
+        appendLog(QString("SX-Port-Konfig %1: %2").arg(ok?"OK":"FAIL", sxPort));
+        if(!out.isEmpty()) appendLog(out);
     }
     if(!rmxPort.isEmpty() && !rmxPort.contains("nicht angeschlossen")){
         const bool ok = writeDaemonOverride(BackendKind::RMX, rmxPort, &out);
-        log->append(QString("RMX-Port-Konfig %1: %2").arg(ok?"OK":"FAIL", rmxPort));
-        if(!out.isEmpty()) log->append(out);
+        appendLog(QString("RMX-Port-Konfig %1: %2").arg(ok?"OK":"FAIL", rmxPort));
+        if(!out.isEmpty()) appendLog(out);
     } else {
-        log->append("RMX-Port-Konfig übersprungen (nicht angeschlossen/leer).");
+        appendLog("RMX-Port-Konfig übersprungen (nicht angeschlossen/leer).");
     }
     QMessageBox::information(this, "USB-Port-Konfig", "Konfiguration geschrieben. Daemon wurde neu geladen/gestartet. Danach bitte neu verbinden oder Menü Verbindung → Alle verbinden nutzen.");
 }
@@ -449,6 +480,18 @@ void MainWindowV3::setupDaemonMenu(){
     connect(disconnectBoth, &QAction::triggered, this, [this]{ disconnectBackend(BackendKind::SX); disconnectBackend(BackendKind::RMX); });
 }
 
+void MainWindowV3::appendLog(const QString& msg){
+    const QString line = QString("%1  %2").arg(v3Ts(), msg);
+    if(log) log->append(line);
+    if(!logFilePath.isEmpty()){
+        QFile f(logFilePath);
+        if(f.open(QIODevice::Append | QIODevice::Text)){
+            QTextStream ts(&f);
+            ts << line << "\n";
+        }
+    }
+}
+
 MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
@@ -461,7 +504,22 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sxPanel = new ConnectionPanel("SX", "daemon:///run/user/1000/sxbusd.sock", 19200);
     rmxPanel = new ConnectionPanel("RMX", "daemon:///tmp/sxbusd_rmx.sock", 57600);
     log = new QTextEdit; log->setReadOnly(true);
+
+    const QString logDir = QDir::homePath() + "/SXServo-Logs";
+    QDir().mkpath(logDir);
+    const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_hhmmss");
+    logFilePath = logDir + QString("/sxservo_qt_v3_") + stamp + ".log";
+    {
+        QFile f(logFilePath);
+        f.open(QIODevice::WriteOnly | QIODevice::Text);
+    }
+    const QString latestPath = logDir + "/sxservo_qt_v3_latest.log";
+    QFile::remove(latestPath);
+    QFile::copy(logFilePath, latestPath);
+
     setupDaemonMenu();
+    appendLog("SX-Monitor-Qt V3 gestartet | Version: V3");
+    appendLog(QString("Logdatei: %1").arg(logFilePath));
     QTimer::singleShot(0, this, [this]{ startRequiredDaemonsIfNeeded(); });
 
     auto* trackPanel = new QWidget;
@@ -588,7 +646,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         int out=0; for(int i=0;i<8;++i) if(bits[i] && bits[i]->isChecked()) out |= (1<<i);
         int bus = sxBusSel->currentIndex();
         bool ok = ctrl.send(BackendKind::SX, bus, adr, out);
-        log->append(QString("BITSEND SX b%1 a%2 v%3 -> %4").arg(bus).arg(adr).arg(out).arg(ok?"OK":"FAIL"));
+        appendLog(QString("BITSEND SX b%1 a%2 v%3 -> %4").arg(bus).arg(adr).arg(out).arg(ok?"OK":"FAIL"));
     };
 
     auto createBitButtonsCell = [this](BackendKind kind, QComboBox* busSel, QTableWidget* table, QCheckBox* bitOrderSwitch, int adr, int value){
@@ -613,7 +671,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 int shownBit = b->property("bit").toInt();
                 int bit = (bitOrderSwitch && bitOrderSwitch->isChecked()) ? (7 - shownBit) : shownBit;
                 if((adr >= 0 && adr <= 3) || (adr >= 104 && adr <= 111)){
-                    log->append(QString("BITSEND BLOCKIERT a%1 (reserviert)").arg(adr));
+                    appendLog(QString("BITSEND BLOCKIERT a%1 (reserviert)").arg(adr));
                     return;
                 }
                 int row = adr % 28;
@@ -627,7 +685,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 int out = cur ^ (1 << bit);
                 int bus = busSel->currentIndex();
                 bool ok = ctrl.send(kind, bus, adr, out);
-                log->append(QString("BITBTN %1 b%2 a%3 bit%4 %5->%6 -> %7")
+                appendLog(QString("BITBTN %1 b%2 a%3 bit%4 %5->%6 -> %7")
                     .arg(kind==BackendKind::SX?"SX":"RMX").arg(bus).arg(adr).arg(bit).arg(cur).arg(out).arg(ok?"OK":"FAIL"));
             });
         }
@@ -849,13 +907,13 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             arm->setAngleDeg(next);
             return next;
         };
-        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(-5); sendWizard(11,s); sendWizard(12,5); sendWizard(13,1); log->append(QString("V2 S%1 -- Winkel %2").arg(s+1).arg(a)); });
-        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(-1); sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); log->append(QString("V2 S%1 - Winkel %2").arg(s+1).arg(a)); });
-        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(1); sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); log->append(QString("V2 S%1 + Winkel %2").arg(s+1).arg(a)); });
-        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(5); sendWizard(11,s); sendWizard(12,5); sendWizard(13,2); log->append(QString("V2 S%1 ++ Winkel %2").arg(s+1).arg(a)); });
-        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard,arm,visualAngle](){ (*visualAngle)[s]=0; arm->setAngleDeg(0); sendWizard(11,s); sendWizard(13,3); log->append(QString("V2 S%1 Mitte Winkel 0").arg(s+1)); });
-        connect(bL,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,1); log->append(QString("V2 S%1 Links speichern").arg(s+1)); });
-        connect(bR,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,2); log->append(QString("V2 S%1 Rechts speichern").arg(s+1)); });
+        connect(bMinus2,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(-5); sendWizard(11,s); sendWizard(12,5); sendWizard(13,1); appendLog(QString("V2 S%1 -- Winkel %2").arg(s+1).arg(a)); });
+        connect(bMinus,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(-1); sendWizard(11,s); sendWizard(12,1); sendWizard(13,1); appendLog(QString("V2 S%1 - Winkel %2").arg(s+1).arg(a)); });
+        connect(bPlus,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(1); sendWizard(11,s); sendWizard(12,1); sendWizard(13,2); appendLog(QString("V2 S%1 + Winkel %2").arg(s+1).arg(a)); });
+        connect(bPlus2,&QPushButton::clicked,this,[this,s,sendWizard,stepArm](){ int a=stepArm(5); sendWizard(11,s); sendWizard(12,5); sendWizard(13,2); appendLog(QString("V2 S%1 ++ Winkel %2").arg(s+1).arg(a)); });
+        connect(bMid,&QPushButton::clicked,this,[this,s,sendWizard,arm,visualAngle](){ (*visualAngle)[s]=0; arm->setAngleDeg(0); sendWizard(11,s); sendWizard(13,3); appendLog(QString("V2 S%1 Mitte Winkel 0").arg(s+1)); });
+        connect(bL,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,1); appendLog(QString("V2 S%1 Links speichern").arg(s+1)); });
+        connect(bR,&QPushButton::clicked,this,[this,s,sendWizard](){ sendWizard(11,s); sendWizard(14,2); appendLog(QString("V2 S%1 Rechts speichern").arg(s+1)); });
 
         int c = s%8;
         int r = (s<8) ? 1 : 4;
@@ -926,28 +984,28 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         return ctrl.send(b, bus, adr, val);
     };
     connect(progOnBtn,&QPushButton::clicked,this,[this,sendWizard]{
-        bool ok = sendWizard(127,0); log->append(QString("PROG EIN -> %1").arg(ok?"OK":"FAIL"));
+        bool ok = sendWizard(127,0); appendLog(QString("PROG EIN -> %1").arg(ok?"OK":"FAIL"));
     });
     connect(progOffBtn,&QPushButton::clicked,this,[this,sendWizard]{
-        bool ok = sendWizard(127,128); log->append(QString("PROG AUS -> %1").arg(ok?"OK":"FAIL"));
+        bool ok = sendWizard(127,128); appendLog(QString("PROG AUS -> %1").arg(ok?"OK":"FAIL"));
     });
-    connect(progStartBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,1); log->append(QString("K10 START -> %1").arg(ok?"OK":"FAIL")); });
-    connect(progSaveBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,3); log->append(QString("K10 SAVE -> %1").arg(ok?"OK":"FAIL")); });
-    connect(progAbortBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,2); log->append(QString("K10 ABORT -> %1").arg(ok?"OK":"FAIL")); });
+    connect(progStartBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,1); appendLog(QString("K10 START -> %1").arg(ok?"OK":"FAIL")); });
+    connect(progSaveBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,3); appendLog(QString("K10 SAVE -> %1").arg(ok?"OK":"FAIL")); });
+    connect(progAbortBtn,&QPushButton::clicked,this,[this,sendWizard]{ bool ok=sendWizard(10,2); appendLog(QString("K10 ABORT -> %1").arg(ok?"OK":"FAIL")); });
     connect(progMidBtn,&QPushButton::clicked,this,[this,sendWizard,progServoIdx]{
         bool a=sendWizard(11,progServoIdx->value()-1); bool b=sendWizard(13,3);
-        log->append(QString("Mitte S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
+        appendLog(QString("Mitte S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
     });
     connect(progStoreLBtn,&QPushButton::clicked,this,[this,sendWizard,progServoIdx]{
         bool a=sendWizard(11,progServoIdx->value()-1); bool b=sendWizard(14,1);
-        log->append(QString("L speichern S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
+        appendLog(QString("L speichern S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
     });
     connect(progStoreRBtn,&QPushButton::clicked,this,[this,sendWizard,progServoIdx]{
         bool a=sendWizard(11,progServoIdx->value()-1); bool b=sendWizard(14,2);
-        log->append(QString("R speichern S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
+        appendLog(QString("R speichern S%1 -> %2/%3").arg(progServoIdx->value()).arg(a?"OK":"FAIL").arg(b?"OK":"FAIL"));
     });
-    connect(progMoveMinusBtn,&QPushButton::clicked,this,[this,sendWizard,progStep]{ bool a=sendWizard(12,progStep->currentText().toInt()); bool b=sendWizard(13,1); log->append(QString("MOVE - -> %1/%2").arg(a?"OK":"FAIL").arg(b?"OK":"FAIL")); });
-    connect(progMovePlusBtn,&QPushButton::clicked,this,[this,sendWizard,progStep]{ bool a=sendWizard(12,progStep->currentText().toInt()); bool b=sendWizard(13,2); log->append(QString("MOVE + -> %1/%2").arg(a?"OK":"FAIL").arg(b?"OK":"FAIL")); });
+    connect(progMoveMinusBtn,&QPushButton::clicked,this,[this,sendWizard,progStep]{ bool a=sendWizard(12,progStep->currentText().toInt()); bool b=sendWizard(13,1); appendLog(QString("MOVE - -> %1/%2").arg(a?"OK":"FAIL").arg(b?"OK":"FAIL")); });
+    connect(progMovePlusBtn,&QPushButton::clicked,this,[this,sendWizard,progStep]{ bool a=sendWizard(12,progStep->currentText().toInt()); bool b=sendWizard(13,2); appendLog(QString("MOVE + -> %1/%2").arg(a?"OK":"FAIL").arg(b?"OK":"FAIL")); });
 
     sendL->addWidget(new QLabel("Send:"));
     sendL->addWidget(new QLabel("Backend")); sendL->addWidget(beBox);
@@ -989,7 +1047,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(sendBtn,&QPushButton::clicked,this,[this,beBox,busBox,adr,val]{
         BackendKind b = (beBox->currentText()=="SX") ? BackendKind::SX : BackendKind::RMX;
         bool ok = ctrl.send(b, busBox->currentText().toInt(), adr->value(), val->value());
-        log->append(QString("SEND %1 b%2 a%3 v%4 -> %5")
+        appendLog(QString("SEND %1 b%2 a%3 v%4 -> %5")
             .arg(beBox->currentText())
             .arg(busBox->currentText())
             .arg(adr->value())
@@ -999,7 +1057,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(readBtn,&QPushButton::clicked,this,[this,beBox,busBox,adr]{
         BackendKind b = (beBox->currentText()=="SX") ? BackendKind::SX : BackendKind::RMX;
         bool ok = ctrl.readAdr(b, busBox->currentText().toInt(), adr->value());
-        log->append(QString("READ %1 b%2 a%3 -> %4")
+        appendLog(QString("READ %1 b%2 a%3 -> %4")
             .arg(beBox->currentText())
             .arg(busBox->currentText())
             .arg(adr->value())
@@ -1011,7 +1069,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         for(const auto& x: backends){
             bool ok126 = ctrl.readAdr(x.b, 0, 126);
             bool ok127 = ctrl.readAdr(x.b, 0, 127);
-            log->append(QString("AUTO %1 READ b0 a126=%2 a127=%3")
+            appendLog(QString("AUTO %1 READ b0 a126=%2 a127=%3")
                 .arg(x.n)
                 .arg(ok126?"OK":"FAIL")
                 .arg(ok127?"OK":"FAIL"));
@@ -1025,7 +1083,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             bool r1 = ctrl.readAdr(x.b, 0, 126);
             bool w0 = ctrl.send(x.b, 0, 126, 0);
             bool r0 = ctrl.readAdr(x.b, 0, 126);
-            log->append(QString("AUTO %1 WR126 set128=%2 read=%3 reset0=%4 read=%5")
+            appendLog(QString("AUTO %1 WR126 set128=%2 read=%3 reset0=%4 read=%5")
                 .arg(x.n)
                 .arg(w1?"OK":"FAIL")
                 .arg(r1?"OK":"FAIL")
@@ -1038,7 +1096,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         bool r1 = ctrl.readAdr(BackendKind::SX, 0, 126);
         bool w0 = ctrl.send(BackendKind::SX, 0, 126, 0);
         bool r0 = ctrl.readAdr(BackendKind::SX, 0, 126);
-        log->append(QString("SX WR126 set128=%1 read=%2 reset0=%3 read=%4")
+        appendLog(QString("SX WR126 set128=%1 read=%2 reset0=%3 read=%4")
             .arg(w1?"OK":"FAIL").arg(r1?"OK":"FAIL").arg(w0?"OK":"FAIL").arg(r0?"OK":"FAIL"));
     });
     connect(rmxWrBtn,&QPushButton::clicked,this,[this]{
@@ -1046,7 +1104,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         bool r1 = ctrl.readAdr(BackendKind::RMX, 0, 126);
         bool w0 = ctrl.send(BackendKind::RMX, 0, 126, 0);
         bool r0 = ctrl.readAdr(BackendKind::RMX, 0, 126);
-        log->append(QString("RMX WR126 set128=%1 read=%2 reset0=%3 read=%4")
+        appendLog(QString("RMX WR126 set128=%1 read=%2 reset0=%3 read=%4")
             .arg(w1?"OK":"FAIL").arg(r1?"OK":"FAIL").arg(w0?"OK":"FAIL").arg(r0?"OK":"FAIL"));
     });
     connect(pSet128Btn,&QPushButton::clicked,this,[adr,val]{ adr->setValue(126); val->setValue(128); });
@@ -1057,7 +1115,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(trackStartBtn,&QPushButton::clicked,this,[this,trackState]{
         const int target = (*trackState == 1) ? 0 : 1;
         bool ok = ctrl.send(BackendKind::SX, 0, 0, target);
-        log->append(QString("GLEIS %1: WRITE SX0 ADR0=%2 -> %3")
+        appendLog(QString("GLEIS %1: WRITE SX0 ADR0=%2 -> %3")
             .arg(target ? "START/AN" : "STOP/AUS")
             .arg(target)
             .arg(ok ? "OK" : "FAIL"));
@@ -1082,7 +1140,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         else if(panel->endpoint().startsWith("daemon://")) panel->setHardwareWarning(true);
     });
     connect(&ctrl,&DualRuntimeController::status,this,[this](BackendKind b,const QString& s){
-        log->append(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
+        appendLog(QString("%1: %2").arg(b==BackendKind::SX?"SX":"RMX", s));
         ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
         if(panel->endpoint().startsWith("daemon://")){
             if(s.contains("SX_HW ONLINE", Qt::CaseInsensitive)) panel->setHardwareWarning(false);
@@ -1094,7 +1152,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(&ctrl,&DualRuntimeController::frameReceived,this,[this,rx126Only,sxTable,rmxTable,sxVals,rmxVals,sxBusSel,rmxBusSel,visualAddrA,visualAddrB,visualBitOrder,visualArm,visualAngle,visualLimitSpin](BackendKind b,int bus,int adr,int val){
         if(b==BackendKind::SX) sxPanel->setHardwareWarning(false); else rmxPanel->setHardwareWarning(false);
         if(rx126Only->isChecked() && !(adr==126 || adr==127)) return;
-        log->append(QString("RX %1 b%2 a%3 v%4")
+        appendLog(QString("RX %1 b%2 a%3 v%4")
             .arg(b==BackendKind::SX?"SX":"RMX")
             .arg(bus).arg(adr).arg(val));
         if(adr>=0 && adr<=111 && (bus==0 || bus==1)){

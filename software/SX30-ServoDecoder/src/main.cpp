@@ -39,7 +39,7 @@ const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-14a";
+const char FW_VERSION[] = "2026-05-24-servo-auto-off";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -110,6 +110,7 @@ int8_t sxLockedServo = -1;
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 // Groessere Staffelzeit reduziert Stromspitzen bei Mehrfach-Umschaltung.
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 180;
+const uint16_t SERVO_HOLD_AFTER_MOVE_MS = 350;
 uint8_t pendingDataA = 0;
 uint8_t pendingDataB = 0;
 uint8_t pendingMaskA = 0;
@@ -119,6 +120,8 @@ bool pendingUseB = false;
 bool hasPendingApply = false;
 uint8_t nextServoToApply = 0;
 uint32_t lastServoSwitchMs = 0;
+uint32_t servoHoldUntilMs[SERVO_COUNT] = {0};
+bool servoOutputActive[SERVO_COUNT] = {false};
 
 // ---------- Hilfsfunktionen ----------
 uint16_t angleToTick(uint8_t angle) {
@@ -149,6 +152,24 @@ int16_t clampRel(uint8_t ch, int16_t rel) {
 void setServoRawPhys(uint8_t ch, uint8_t physAngle) {
   if (ch >= SERVO_COUNT) return;
   pwm.setPWM(ch, 0, angleToTick(physAngle));
+  servoOutputActive[ch] = true;
+  servoHoldUntilMs[ch] = millis() + SERVO_HOLD_AFTER_MOVE_MS;
+}
+
+void releaseServoOutput(uint8_t ch) {
+  if (ch >= SERVO_COUNT) return;
+  pwm.setPWM(ch, 0, 0);
+  servoOutputActive[ch] = false;
+}
+
+void processServoAutoRelease() {
+  const uint32_t now = millis();
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    if (!servoOutputActive[ch]) continue;
+    if ((int32_t)(now - servoHoldUntilMs[ch]) >= 0) {
+      releaseServoOutput(ch);
+    }
+  }
 }
 
 void setServoRel(uint8_t ch, int16_t rel) {
@@ -793,6 +814,7 @@ void loop() {
 
   // Pro Loop maximal ein Servo-Schritt
   processPendingServoStep();
+  processServoAutoRelease();
 
   uint8_t track = sx.getTrackBit();
 

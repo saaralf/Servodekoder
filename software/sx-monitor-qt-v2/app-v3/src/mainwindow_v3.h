@@ -18,11 +18,13 @@ private:
     void connectBackendFromPanel(BackendKind backend);
     void disconnectBackend(BackendKind backend);
     void showUsbPortConfigDialog();
+    void appendLog(const QString& msg);
     QStringList scanUsbSerialPorts(QString* details=nullptr) const;
     bool writeDaemonOverride(BackendKind backend, const QString& serialPath, QString* output=nullptr);
 
     ConnectionPanel* sxPanel{};
     ConnectionPanel* rmxPanel{};
     QTextEdit* log{};
+    QString logFilePath;
     DualRuntimeController ctrl;
 };
