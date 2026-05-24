@@ -22,6 +22,11 @@
 #include <QPixmap>
 #include <QCoreApplication>
 #include <QScrollArea>
+#include <QAction>
+#include <QMenu>
+#include <QMenuBar>
+#include <QProcess>
+#include <QTimer>
 
 class ServoArmWidget : public QWidget {
 public:
@@ -74,6 +79,123 @@ static QString bits8(int v){
     return s;
 }
 
+static const char* kSxService = "sxbusd2.service";
+static const char* kRmxService = "sxbusd-dual-rmx.service";
+
+bool MainWindowV3::systemctlUser(const QStringList& args, QString* output){
+    QProcess p;
+    QStringList fullArgs;
+    fullArgs << "--user";
+    fullArgs << args;
+    p.start("systemctl", fullArgs);
+    if(!p.waitForFinished(8000)){
+        p.kill();
+        p.waitForFinished(1000);
+        if(output) *output = "timeout";
+        return false;
+    }
+    const QString out = QString::fromLocal8Bit(p.readAllStandardOutput()).trimmed();
+    const QString err = QString::fromLocal8Bit(p.readAllStandardError()).trimmed();
+    if(output) *output = out + (err.isEmpty() ? QString() : QString("\n") + err);
+    return p.exitStatus() == QProcess::NormalExit && p.exitCode() == 0;
+}
+
+bool MainWindowV3::serviceActive(const QString& service){
+    QString out;
+    const bool ok = systemctlUser({"is-active", "--quiet", service}, &out);
+    Q_UNUSED(out);
+    return ok;
+}
+
+void MainWindowV3::daemonServiceAction(const QString& service, const QString& action, const QString& label){
+    QString out;
+    const bool ok = systemctlUser({action, service}, &out);
+    if(log){
+        log->append(QString("Daemon %1 %2: %3%4")
+            .arg(label, action, ok ? "OK" : "FAIL", out.isEmpty() ? QString() : QString(" — ") + out));
+    }
+}
+
+void MainWindowV3::startRequiredDaemonsIfNeeded(){
+    const struct Item { const char* service; const char* label; } items[] = {
+        {kSxService, "SX"},
+        {kRmxService, "RMX"},
+    };
+    for(const auto& item : items){
+        if(serviceActive(item.service)){
+            if(log) log->append(QString("Daemon %1 läuft bereits (%2)").arg(item.label, item.service));
+        } else {
+            if(log) log->append(QString("Daemon %1 läuft nicht — starte %2").arg(item.label, item.service));
+            daemonServiceAction(item.service, "start", item.label);
+        }
+    }
+}
+
+void MainWindowV3::connectBackendFromPanel(BackendKind backend){
+    ConnectionPanel* panel = (backend==BackendKind::SX) ? sxPanel : rmxPanel;
+    const char* label = (backend==BackendKind::SX) ? "SX" : "RMX";
+    if(panel->endpoint().startsWith("daemon://")){
+        daemonServiceAction(backend==BackendKind::SX ? kSxService : kRmxService, "start", label);
+    }
+    bool ok = ctrl.connectBackend(backend, panel->endpoint(), panel->baud());
+    log->append(QString("%1 connect %2").arg(label, ok?"OK":"FAIL"));
+    if(!ok && panel->endpoint().startsWith("daemon://")){
+        QTimer::singleShot(1000, this, [this, backend, panel, label]{
+            bool retryOk = ctrl.connectBackend(backend, panel->endpoint(), panel->baud());
+            log->append(QString("%1 connect retry nach Daemon-Start %2").arg(label, retryOk?"OK":"FAIL"));
+        });
+    }
+}
+
+void MainWindowV3::disconnectBackend(BackendKind backend){
+    ctrl.disconnectBackend(backend);
+    log->append(QString("%1 disconnect OK").arg(backend==BackendKind::SX ? "SX" : "RMX"));
+}
+
+void MainWindowV3::setupDaemonMenu(){
+    auto* daemonMenu = menuBar()->addMenu("Daemons");
+    auto addAction = [this, daemonMenu](const QString& text, const QString& service, const QString& action, const QString& label){
+        QAction* a = daemonMenu->addAction(text);
+        connect(a, &QAction::triggered, this, [this, service, action, label]{ daemonServiceAction(service, action, label); });
+    };
+    addAction("SX-Daemon starten", kSxService, "start", "SX");
+    addAction("SX-Daemon stoppen", kSxService, "stop", "SX");
+    addAction("SX-Daemon neu starten", kSxService, "restart", "SX");
+    daemonMenu->addSeparator();
+    addAction("RMX-Daemon starten", kRmxService, "start", "RMX");
+    addAction("RMX-Daemon stoppen", kRmxService, "stop", "RMX");
+    addAction("RMX-Daemon neu starten", kRmxService, "restart", "RMX");
+    daemonMenu->addSeparator();
+    QAction* startBoth = daemonMenu->addAction("Alle Daemons starten");
+    connect(startBoth, &QAction::triggered, this, [this]{ startRequiredDaemonsIfNeeded(); });
+    QAction* restartBoth = daemonMenu->addAction("Alle Daemons neu starten");
+    connect(restartBoth, &QAction::triggered, this, [this]{
+        daemonServiceAction(kSxService, "restart", "SX");
+        daemonServiceAction(kRmxService, "restart", "RMX");
+    });
+    QAction* stopBoth = daemonMenu->addAction("Alle Daemons stoppen");
+    connect(stopBoth, &QAction::triggered, this, [this]{
+        daemonServiceAction(kSxService, "stop", "SX");
+        daemonServiceAction(kRmxService, "stop", "RMX");
+    });
+
+    auto* connMenu = menuBar()->addMenu("Verbindung");
+    QAction* connectSx = connMenu->addAction("SX verbinden");
+    connect(connectSx, &QAction::triggered, this, [this]{ connectBackendFromPanel(BackendKind::SX); });
+    QAction* disconnectSx = connMenu->addAction("SX trennen");
+    connect(disconnectSx, &QAction::triggered, this, [this]{ disconnectBackend(BackendKind::SX); });
+    connMenu->addSeparator();
+    QAction* connectRmx = connMenu->addAction("RMX verbinden");
+    connect(connectRmx, &QAction::triggered, this, [this]{ connectBackendFromPanel(BackendKind::RMX); });
+    QAction* disconnectRmx = connMenu->addAction("RMX trennen");
+    connect(disconnectRmx, &QAction::triggered, this, [this]{ disconnectBackend(BackendKind::RMX); });
+    connMenu->addSeparator();
+    QAction* connectBoth = connMenu->addAction("Alle verbinden");
+    connect(connectBoth, &QAction::triggered, this, [this]{ connectBackendFromPanel(BackendKind::SX); connectBackendFromPanel(BackendKind::RMX); });
+    QAction* disconnectBoth = connMenu->addAction("Alle trennen");
+    connect(disconnectBoth, &QAction::triggered, this, [this]{ disconnectBackend(BackendKind::SX); disconnectBackend(BackendKind::RMX); });
+}
+
 MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     auto* scroll = new QScrollArea;
     scroll->setWidgetResizable(true);
@@ -85,6 +207,8 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     sxPanel = new ConnectionPanel("SX", "daemon:///run/user/1000/sxbusd.sock", 19200);
     rmxPanel = new ConnectionPanel("RMX", "daemon:///tmp/sxbusd_rmx.sock", 57600);
     log = new QTextEdit; log->setReadOnly(true);
+    setupDaemonMenu();
+    QTimer::singleShot(0, this, [this]{ startRequiredDaemonsIfNeeded(); });
 
     auto* sendBlock = new QWidget;
     auto* sendBlockL = new QVBoxLayout(sendBlock);
@@ -498,16 +622,10 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
     connect(pRead127Btn,&QPushButton::clicked,this,[adr]{ adr->setValue(127); });
     connect(clearLogBtn,&QPushButton::clicked,this,[this]{ log->clear(); });
 
-    connect(sxPanel,&ConnectionPanel::connectRequested,this,[this](const QString& ep,int b){
-        bool ok = ctrl.connectBackend(BackendKind::SX, ep, b);
-        log->append(QString("SX connect %1").arg(ok?"OK":"FAIL"));
-    });
-    connect(rmxPanel,&ConnectionPanel::connectRequested,this,[this](const QString& ep,int b){
-        bool ok = ctrl.connectBackend(BackendKind::RMX, ep, b);
-        log->append(QString("RMX connect %1").arg(ok?"OK":"FAIL"));
-    });
-    connect(sxPanel,&ConnectionPanel::disconnectRequested,this,[this]{ ctrl.disconnectBackend(BackendKind::SX); });
-    connect(rmxPanel,&ConnectionPanel::disconnectRequested,this,[this]{ ctrl.disconnectBackend(BackendKind::RMX); });
+    connect(sxPanel,&ConnectionPanel::connectRequested,this,[this](const QString&,int){ connectBackendFromPanel(BackendKind::SX); });
+    connect(rmxPanel,&ConnectionPanel::connectRequested,this,[this](const QString&,int){ connectBackendFromPanel(BackendKind::RMX); });
+    connect(sxPanel,&ConnectionPanel::disconnectRequested,this,[this]{ disconnectBackend(BackendKind::SX); });
+    connect(rmxPanel,&ConnectionPanel::disconnectRequested,this,[this]{ disconnectBackend(BackendKind::RMX); });
 
     connect(&ctrl,&DualRuntimeController::connectedChanged,this,[this](BackendKind b,bool on){
         ConnectionPanel* panel = (b==BackendKind::SX) ? sxPanel : rmxPanel;
