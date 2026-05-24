@@ -15,8 +15,11 @@ ConnectionPanel::ConnectionPanel(const QString& title, const QString& defaultEnd
     disconnectBtn = new QPushButton("Disconnect");
     disconnectBtn->setEnabled(false);
     statusLbl = new QLabel("offline");
+    statusLbl->setFixedWidth(170);
+    statusLbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     trackLbl = new QLabel("Track: ?");
-    trackLbl->setMinimumWidth(80);
+    trackLbl->setFixedWidth(95);
+    trackLbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     l->addWidget(titleLbl); l->addWidget(new QLabel("Endpoint:")); l->addWidget(endpointEdit,1);
     l->addWidget(new QLabel("Baud:")); l->addWidget(baudEdit);
     l->addWidget(connectBtn); l->addWidget(disconnectBtn); l->addWidget(statusLbl); l->addWidget(trackLbl);
