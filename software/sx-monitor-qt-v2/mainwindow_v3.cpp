@@ -89,6 +89,16 @@ static QString bits8(int v){
     return s;
 }
 
+static QString bitsButtons(int v){
+    QString s;
+    for(int i=7;i>=0;--i){
+        const bool on = (v & (1<<i)) != 0;
+        s += on ? "[1]" : "[0]";
+        if(i>0) s += " ";
+    }
+    return s;
+}
+
 static const char* kSxService = "sxbusd2.service";
 static const char* kRmxService = "sxbusd-dual-rmx.service";
 static const char* kSxDaemonBinary = "/opt/programme/selectrix/Servodekoder/software/sx-bus-core/sx_bus_daemon2";
@@ -522,7 +532,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         int base = blk * 3;
         sxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
         sxTable->setItem(row,base+1,new QTableWidgetItem("-"));
-        sxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
+        sxTable->setItem(row,base+2,new QTableWidgetItem(bitsButtons(0)));
         rmxTable->setItem(row,base+0,new QTableWidgetItem(QString::number(adr)));
         rmxTable->setItem(row,base+1,new QTableWidgetItem("-"));
         rmxTable->setItem(row,base+2,new QTableWidgetItem("--------"));
@@ -586,7 +596,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             int base=blk*3;
             t->setColumnWidth(base+0, 42);
             t->setColumnWidth(base+1, 48);
-            t->setColumnWidth(base+2, 86);
+            t->setColumnWidth(base+2, 150);
         }
         t->setStyleSheet(
             "QTableWidget { background: #e8ecf3; color: #0b1020; gridline-color: #7d8798; alternate-background-color: #d7dde8; border: 2px solid #11141c; }"
@@ -620,8 +630,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
         if(column % 3 != 2) return; // nur Bits-Spalte
         QTableWidgetItem* adrItem = sxTable->item(row, column-2);
         QTableWidgetItem* valItem = sxTable->item(row, column-1);
-        QTableWidgetItem* bitsItem = sxTable->item(row, column);
-        if(!adrItem || !valItem || !bitsItem) return;
+        if(!adrItem || !valItem) return;
         bool okAdr=false, okVal=false;
         int adr = adrItem->text().toInt(&okAdr);
         int cur = valItem->text().toInt(&okVal);
@@ -631,12 +640,13 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
             return;
         }
 
-        QRect vr = sxTable->visualItemRect(bitsItem);
+        QRect vr = sxTable->visualRect(sxTable->model()->index(row, column));
         QPoint p = sxTable->viewport()->mapFromGlobal(QCursor::pos());
         if(!vr.contains(p)) return;
         int relX = p.x() - vr.left();
         int w = std::max(1, vr.width());
-        int idxFromLeft = std::clamp((relX * 8) / w, 0, 7);
+        int bitW = std::max(1, w / 8);
+        int idxFromLeft = std::clamp(relX / bitW, 0, 7);
         int bit = 7 - idxFromLeft;
 
         int out = cur ^ (1 << bit);
@@ -1032,7 +1042,7 @@ MainWindowV3::MainWindowV3(QWidget* parent): QMainWindow(parent){
                 t->item(row,base+2)->setBackground(QColor(255,245,170));
             }
             t->item(row,base+1)->setText(nv);
-            t->item(row,base+2)->setText(bits8(val));
+            t->item(row,base+2)->setText((b==BackendKind::SX) ? bitsButtons(val) : bits8(val));
 
             int adrA = visualAddrA->value();
             int adrB = visualAddrB->value();
