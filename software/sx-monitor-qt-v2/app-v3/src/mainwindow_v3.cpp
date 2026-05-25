@@ -47,7 +47,20 @@ class ServoArmWidget : public QWidget {
 public:
     explicit ServoArmWidget(QWidget* parent=nullptr): QWidget(parent) {
         setMinimumSize(150,150);
-        QString base = QCoreApplication::applicationDirPath() + "/../assets/";
+        const QString appDir = QCoreApplication::applicationDirPath();
+        const QStringList candidates = {
+            appDir + "/../assets/",
+            appDir + "/../../assets/",
+            appDir + "/../../../assets/",
+            QStringLiteral("/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/assets/")
+        };
+        QString base;
+        for(const QString& c : candidates){
+            if(QFile::exists(c + "servo_body_blue.png") && QFile::exists(c + "servo_arm_new.png")){
+                base = c;
+                break;
+            }
+        }
         body = QPixmap(base + "servo_body_blue.png");
         arm = QPixmap(base + "servo_arm_new.png");
         bodyHubX = 624.7 / 1254.0;

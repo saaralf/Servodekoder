@@ -17,3 +17,13 @@ target_include_directories(sx_monitor_qt_v3 PRIVATE
     ../../sx-bus-core
 )
 target_link_libraries(sx_monitor_qt_v3 PRIVATE Qt6::Widgets)
+
+add_custom_command(TARGET sx_monitor_qt_v3 POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:sx_monitor_qt_v3>/../assets"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/assets/servo_body_blue.png"
+        "$<TARGET_FILE_DIR:sx_monitor_qt_v3>/../assets/servo_body_blue.png"
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "${CMAKE_SOURCE_DIR}/assets/servo_arm_new.png"
+        "$<TARGET_FILE_DIR:sx_monitor_qt_v3>/../assets/servo_arm_new.png"
+)
