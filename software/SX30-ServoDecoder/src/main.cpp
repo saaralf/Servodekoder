@@ -23,9 +23,9 @@
 #include <SX30.h>
 
 // ---------------- Hardware ----------------
-#define PROGLED      13
-#define PROGBUTTON   A6
-#define KEYPRESS     (analogRead(PROGBUTTON) > 512)
+#define PROGLED 13
+#define PROGBUTTON A6
+#define KEYPRESS (analogRead(PROGBUTTON) > 512)
 #define DEBOUNCETIME 200
 
 // SX30 ISR auf INT0
@@ -35,11 +35,11 @@ Adafruit_PWMServoDriver pwm(0x40);
 
 // ---------------- Servo/PCA9685 ----------------
 const uint8_t SERVO_COUNT = 16;
-const uint16_t SERVO_MIN_TICK = 110;   // bei Bedarf kalibrieren
-const uint16_t SERVO_MAX_TICK = 500;   // bei Bedarf kalibrieren
+const uint16_t SERVO_MIN_TICK = 110; // bei Bedarf kalibrieren
+const uint16_t SERVO_MAX_TICK = 500; // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-24-servo-auto-off";
+const char FW_VERSION[] = "2026-05-30-ABeingebaut";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -49,32 +49,34 @@ const uint8_t SX_ADDR_MAX = 111;
 
 // Programmierkanäle am SX-Bus
 // Altbestand (Adresse/Orientierung)
-const uint8_t SX_CHAN_ADDR_A    = 1;
-const uint8_t SX_CHAN_ADDR_B    = 2;
-const uint8_t SX_CHAN_ORIENT_L  = 3;   // Servo 0..7:  1=Abzweig links, 0=rechts
-const uint8_t SX_CHAN_ORIENT_H  = 4;   // Servo 8..15: 1=Abzweig links, 0=rechts
+const uint8_t SX_CHAN_ADDR_A = 1;
+const uint8_t SX_CHAN_ADDR_B = 2;
+const uint8_t SX_CHAN_ORIENT_L = 3; // Servo 0..7:  1=Abzweig links, 0=rechts
+const uint8_t SX_CHAN_ORIENT_H = 4; // Servo 8..15: 1=Abzweig links, 0=rechts
 
 // Neuer Setup-Wizard (gleiches Verhalten wie Serial-Setup)
 const uint8_t SX_CHAN_SETUP_SESSION = 9; // Session-ID 1..255 (0=invalid)
-const uint8_t SX_CHAN_SETUP_CMD   = 10; // 1=start, 2=abort, 3=save+end
-const uint8_t SX_CHAN_SETUP_SERVO = 11; // 0..15
-const uint8_t SX_CHAN_SETUP_STEP  = 12; // 1/2/5/10/20
-const uint8_t SX_CHAN_SETUP_MOVE  = 13; // 1=-step, 2=+step, 3=mitte
-const uint8_t SX_CHAN_SETUP_STORE = 14; // 1=save L, 2=save R
-const uint8_t SX_CHAN_SETUP_ACK   = 15; // 0=idle,1=ok,2=err,3=busy
+const uint8_t SX_CHAN_SETUP_CMD = 10;    // 1=start, 2=abort, 3=save+end
+const uint8_t SX_CHAN_SETUP_SERVO = 11;  // 0..15
+const uint8_t SX_CHAN_SETUP_STEP = 12;   // 1/2/5/10/20
+const uint8_t SX_CHAN_SETUP_MOVE = 13;   // 1=-step, 2=+step, 3=mitte
+const uint8_t SX_CHAN_SETUP_STORE = 14;  // 1=save L, 2=save R
+const uint8_t SX_CHAN_SETUP_ACK = 15;    // 0=idle,1=ok,2=err,3=busy
 
 // ---------------- EEPROM ----------------
 const uint16_t CFG_MAGIC = 0x5A41;
 const int EEPROM_ADDR = 0;
 
-struct ServoCfg {
-  int16_t zeroPhys;         // physischer Nullpunkt für rel=0
-  int16_t relMin;           // linker Endpunkt relativ zu zeroPhys
-  int16_t relMax;           // rechter Endpunkt relativ zu zeroPhys
-  uint8_t divergingIsLeft;  // 1=Abzweig links, 0=Abzweig rechts
+struct ServoCfg
+{
+  int16_t zeroPhys;        // physischer Nullpunkt für rel=0
+  int16_t relMin;          // linker Endpunkt relativ zu zeroPhys
+  int16_t relMax;          // rechter Endpunkt relativ zu zeroPhys
+  uint8_t divergingIsLeft; // 1=Abzweig links, 0=Abzweig rechts
 };
 
-struct DecoderCfg {
+struct DecoderCfg
+{
   uint16_t magic;
   uint8_t sxAddrA;
   uint8_t sxAddrB;
@@ -124,88 +126,122 @@ uint32_t servoHoldUntilMs[SERVO_COUNT] = {0};
 bool servoOutputActive[SERVO_COUNT] = {false};
 
 // ---------- Hilfsfunktionen ----------
-uint16_t angleToTick(uint8_t angle) {
-  if (angle > 180) angle = 180;
+uint16_t angleToTick(uint8_t angle)
+{
+  if (angle > 180)
+    angle = 180;
   return map(angle, 0, 180, SERVO_MIN_TICK, SERVO_MAX_TICK);
 }
 
-bool validSxAddr(uint8_t a) {
+bool validSxAddr(uint8_t a)
+{
   return (a >= SX_ADDR_MIN && a <= SX_ADDR_MAX);
 }
 
-bool validOrDisabledSxAddr(uint8_t a) {
+bool validOrDisabledSxAddr(uint8_t a)
+{
   return (a == SX_ADDR_DISABLED) || validSxAddr(a);
 }
 
-bool sxAddrEnabled(uint8_t a) {
+bool sxAddrEnabled(uint8_t a)
+{
   return validSxAddr(a);
 }
 
-int16_t clampRel(uint8_t ch, int16_t rel) {
-  if (rel < -90) rel = -90;
-  if (rel > 90) rel = 90;
-  if (rel < cfg.servo[ch].relMin) rel = cfg.servo[ch].relMin;
-  if (rel > cfg.servo[ch].relMax) rel = cfg.servo[ch].relMax;
+int16_t clampRel(uint8_t ch, int16_t rel)
+{
+  if (rel < -90)
+    rel = -90;
+  if (rel > 90)
+    rel = 90;
+  if (rel < cfg.servo[ch].relMin)
+    rel = cfg.servo[ch].relMin;
+  if (rel > cfg.servo[ch].relMax)
+    rel = cfg.servo[ch].relMax;
   return rel;
 }
 
-void setServoRawPhys(uint8_t ch, uint8_t physAngle) {
-  if (ch >= SERVO_COUNT) return;
+void setServoRawPhys(uint8_t ch, uint8_t physAngle)
+{
+  if (ch >= SERVO_COUNT)
+    return;
   pwm.setPWM(ch, 0, angleToTick(physAngle));
   servoOutputActive[ch] = true;
   servoHoldUntilMs[ch] = millis() + SERVO_HOLD_AFTER_MOVE_MS;
 }
 
-void releaseServoOutput(uint8_t ch) {
-  if (ch >= SERVO_COUNT) return;
+void releaseServoOutput(uint8_t ch)
+{
+  if (ch >= SERVO_COUNT)
+    return;
   pwm.setPWM(ch, 0, 0);
   servoOutputActive[ch] = false;
 }
 
-void processServoAutoRelease() {
+void processServoAutoRelease()
+{
   const uint32_t now = millis();
-  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
-    if (!servoOutputActive[ch]) continue;
-    if ((int32_t)(now - servoHoldUntilMs[ch]) >= 0) {
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++)
+  {
+    if (!servoOutputActive[ch])
+      continue;
+    if ((int32_t)(now - servoHoldUntilMs[ch]) >= 0)
+    {
       releaseServoOutput(ch);
     }
   }
 }
 
-void setServoRel(uint8_t ch, int16_t rel) {
-  if (ch >= SERVO_COUNT) return;
+void setServoRel(uint8_t ch, int16_t rel)
+{
+  if (ch >= SERVO_COUNT)
+    return;
   rel = clampRel(ch, rel);
 
   int16_t phys = cfg.servo[ch].zeroPhys + rel;
-  if (phys < 0) phys = 0;
-  if (phys > 180) phys = 180;
+  if (phys < 0)
+    phys = 0;
+  if (phys > 180)
+    phys = 180;
 
   setServoRawPhys(ch, (uint8_t)phys);
 }
 
-void moveGerade(uint8_t ch) {
-  if (cfg.servo[ch].divergingIsLeft) {
+void moveGerade(uint8_t ch)
+{
+  if (cfg.servo[ch].divergingIsLeft)
+  {
     setServoRel(ch, cfg.servo[ch].relMax);
-  } else {
+  }
+  else
+  {
     setServoRel(ch, cfg.servo[ch].relMin);
   }
 }
 
-void moveAbzweig(uint8_t ch) {
-  if (cfg.servo[ch].divergingIsLeft) {
+void moveAbzweig(uint8_t ch)
+{
+  if (cfg.servo[ch].divergingIsLeft)
+  {
     setServoRel(ch, cfg.servo[ch].relMin);
-  } else {
+  }
+  else
+  {
     setServoRel(ch, cfg.servo[ch].relMax);
   }
 }
 
-void applyBitToServo(uint8_t ch, uint8_t bitVal) {
+void applyBitToServo(uint8_t ch, uint8_t bitVal)
+{
   // 0 = Gerade, 1 = Abzweig
-  if (bitVal) moveAbzweig(ch);
-  else moveGerade(ch);
+  if (bitVal)
+    moveAbzweig(ch);
+  else
+    moveGerade(ch);
 }
 
-void applyAllFromSx(uint8_t dataA, uint8_t dataB, bool useA, bool useB) {
+void applyAllFromSx(uint8_t dataA, uint8_t dataB, bool useA, bool useB)
+{
   // Nur geaenderte Bits als Pending markieren (wichtig: sonst bewegen sich zu viele Servos)
   pendingDataA = dataA;
   pendingDataB = dataB;
@@ -218,26 +254,35 @@ void applyAllFromSx(uint8_t dataA, uint8_t dataB, bool useA, bool useB) {
   hasPendingApply = (pendingMaskA != 0) || (pendingMaskB != 0);
 }
 
-void processPendingServoStep() {
-  if (!hasPendingApply) return;
-  if ((millis() - lastServoSwitchMs) < SERVO_SWITCH_INTERVAL_MS) return;
+void processPendingServoStep()
+{
+  if (!hasPendingApply)
+    return;
+  if ((millis() - lastServoSwitchMs) < SERVO_SWITCH_INTERVAL_MS)
+    return;
 
-  for (uint8_t n = 0; n < SERVO_COUNT; n++) {
+  for (uint8_t n = 0; n < SERVO_COUNT; n++)
+  {
     uint8_t ch = (nextServoToApply + n) % SERVO_COUNT;
     bool enabled = (ch < 8) ? pendingUseA : pendingUseB;
-    if (!enabled) continue;
+    if (!enabled)
+      continue;
 
     uint8_t bitVal = (ch < 8) ? bitRead(pendingDataA, ch)
                               : bitRead(pendingDataB, ch - 8);
     bool isPending = (ch < 8) ? bitRead(pendingMaskA, ch)
                               : bitRead(pendingMaskB, ch - 8);
 
-    if (isPending) {
+    if (isPending)
+    {
       applyBitToServo(ch, bitVal);
-      if (ch < 8) {
+      if (ch < 8)
+      {
         bitWrite(oldDataA, ch, bitVal);
         bitWrite(pendingMaskA, ch, 0);
-      } else {
+      }
+      else
+      {
         bitWrite(oldDataB, ch - 8, bitVal);
         bitWrite(pendingMaskB, ch - 8, 0);
       }
@@ -254,11 +299,13 @@ void processPendingServoStep() {
   pendingMaskB = 0;
 }
 
-void setDefaults() {
+void setDefaults()
+{
   cfg.sxAddrA = 72;
   cfg.sxAddrB = 73;
 
-  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+  for (uint8_t i = 0; i < SERVO_COUNT; i++)
+  {
     cfg.servo[i].zeroPhys = 90;
     cfg.servo[i].relMin = -40;
     cfg.servo[i].relMax = 40;
@@ -266,169 +313,254 @@ void setDefaults() {
   }
 }
 
-bool configValid(const DecoderCfg &c) {
-  if (c.magic != CFG_MAGIC) return false;
-  if (!validOrDisabledSxAddr(c.sxAddrA) || !validOrDisabledSxAddr(c.sxAddrB)) return false;
+bool configValid(const DecoderCfg &c)
+{
+  if (c.magic != CFG_MAGIC)
+    return false;
+  if (!validOrDisabledSxAddr(c.sxAddrA) || !validOrDisabledSxAddr(c.sxAddrB))
+    return false;
   // Mindestens eine SX-Adresse muss aktiv sein
-  if (!sxAddrEnabled(c.sxAddrA) && !sxAddrEnabled(c.sxAddrB)) return false;
+  if (!sxAddrEnabled(c.sxAddrA) && !sxAddrEnabled(c.sxAddrB))
+    return false;
 
-  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+  for (uint8_t i = 0; i < SERVO_COUNT; i++)
+  {
     const ServoCfg &s = c.servo[i];
-    if (s.zeroPhys < 0 || s.zeroPhys > 180) return false;
-    if (s.relMin < -90 || s.relMin > 90) return false;
-    if (s.relMax < -90 || s.relMax > 90) return false;
-    if (s.relMin >= s.relMax) return false;
-    if (!(s.divergingIsLeft == 0 || s.divergingIsLeft == 1)) return false;
+    if (s.zeroPhys < 0 || s.zeroPhys > 180)
+      return false;
+    if (s.relMin < -90 || s.relMin > 90)
+      return false;
+    if (s.relMax < -90 || s.relMax > 90)
+      return false;
+    if (s.relMin >= s.relMax)
+      return false;
+    if (!(s.divergingIsLeft == 0 || s.divergingIsLeft == 1))
+      return false;
   }
   return true;
 }
 
-void saveConfig() {
+void saveConfig()
+{
   cfg.magic = CFG_MAGIC;
   EEPROM.put(EEPROM_ADDR, cfg);
   delay(10);
 }
 
-bool loadConfig() {
+bool loadConfig()
+{
   DecoderCfg tmp;
   EEPROM.get(EEPROM_ADDR, tmp);
-  if (!configValid(tmp)) return false;
+  if (!configValid(tmp))
+    return false;
   cfg = tmp;
   return true;
 }
 
-uint8_t getOrientationMaskLow() {
+uint8_t getOrientationMaskLow()
+{
   uint8_t m = 0;
-  for (uint8_t i = 0; i < 8; i++) {
-    if (cfg.servo[i].divergingIsLeft) bitSet(m, i);
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    if (cfg.servo[i].divergingIsLeft)
+      bitSet(m, i);
   }
   return m;
 }
 
-uint8_t getOrientationMaskHigh() {
+uint8_t getOrientationMaskHigh()
+{
   uint8_t m = 0;
-  for (uint8_t i = 0; i < 8; i++) {
-    if (cfg.servo[i + 8].divergingIsLeft) bitSet(m, i);
+  for (uint8_t i = 0; i < 8; i++)
+  {
+    if (cfg.servo[i + 8].divergingIsLeft)
+      bitSet(m, i);
   }
   return m;
 }
 
-void setOrientationFromMasks(uint8_t lowMask, uint8_t highMask) {
-  for (uint8_t i = 0; i < 8; i++) {
+void setOrientationFromMasks(uint8_t lowMask, uint8_t highMask)
+{
+  for (uint8_t i = 0; i < 8; i++)
+  {
     cfg.servo[i].divergingIsLeft = bitRead(lowMask, i) ? 1 : 0;
   }
-  for (uint8_t i = 0; i < 8; i++) {
+  for (uint8_t i = 0; i < 8; i++)
+  {
     cfg.servo[i + 8].divergingIsLeft = bitRead(highMask, i) ? 1 : 0;
   }
 }
 
-void printSetupHelp() {
+void printSetupHelp()
+{
   Serial.println(F("\n=== SERVO SETUP ==="));
   Serial.println(F("n = naechster Servo"));
   Serial.println(F("v = voriger Servo"));
   Serial.println(F("0 = Mitte (rel 0)"));
   Serial.println(F("l = linken Anschlag aus aktueller Position speichern"));
   Serial.println(F("r = rechten Anschlag aus aktueller Position speichern"));
-  Serial.println(F("1/2/5/a/b = Schrittweite 1/2/5/10/20"));
+  Serial.println(F("1/2/5 = Schrittweite 1/2/5"));
+  Serial.println(F("a = gespeicherte Abzweig-Position anfahren"));
+  Serial.println(F("g = gespeicherte Gerade-Position anfahren"));
   Serial.println(F("+ = nach rechts, - = nach links (um Schrittweite)"));
   Serial.println(F("w = alles speichern und Setup beenden"));
   Serial.println(F("x = Setup ohne Speichern beenden"));
 }
 
-void setupTelemetryMove(const __FlashStringHelper* src, int16_t step, int8_t moveCmd, int16_t relBefore, int16_t relAfter) {
-  Serial.print(F("ACK_SETUP_MOVE src=")); Serial.print(src);
-  Serial.print(F(" servo=")); Serial.print(setupServo + 1);
-  Serial.print(F(" rel=")); Serial.print(setupRelPos);
-  Serial.print(F(" relBefore=")); Serial.print(relBefore);
-  Serial.print(F(" relAfter=")); Serial.print(relAfter);
-  Serial.print(F(" step=")); Serial.print(step);
-  Serial.print(F(" move=")); Serial.println(moveCmd);
+void setupTelemetryMove(const __FlashStringHelper *src, int16_t step, int8_t moveCmd, int16_t relBefore, int16_t relAfter)
+{
+  Serial.print(F("ACK_SETUP_MOVE src="));
+  Serial.print(src);
+  Serial.print(F(" servo="));
+  Serial.print(setupServo + 1);
+  Serial.print(F(" rel="));
+  Serial.print(setupRelPos);
+  Serial.print(F(" relBefore="));
+  Serial.print(relBefore);
+  Serial.print(F(" relAfter="));
+  Serial.print(relAfter);
+  Serial.print(F(" step="));
+  Serial.print(step);
+  Serial.print(F(" move="));
+  Serial.println(moveCmd);
 }
 
-void setupTelemetryState(const __FlashStringHelper* src, const __FlashStringHelper* action) {
-  Serial.print(F("ACK_SETUP_STATE src=")); Serial.print(src);
-  Serial.print(F(" action=")); Serial.print(action);
-  Serial.print(F(" servo=")); Serial.print(setupServo + 1);
-  Serial.print(F(" rel=")); Serial.println(setupRelPos);
+void setupTelemetryState(const __FlashStringHelper *src, const __FlashStringHelper *action)
+{
+  Serial.print(F("ACK_SETUP_STATE src="));
+  Serial.print(src);
+  Serial.print(F(" action="));
+  Serial.print(action);
+  Serial.print(F(" servo="));
+  Serial.print(setupServo + 1);
+  Serial.print(F(" rel="));
+  Serial.println(setupRelPos);
 }
 
-void setupTelemetryStore(const __FlashStringHelper* src, int8_t storeCmd) {
-  Serial.print(F("ACK_SETUP_STORE src=")); Serial.print(src);
-  Serial.print(F(" servo=")); Serial.print(setupServo + 1);
-  Serial.print(F(" cmd=")); Serial.print(storeCmd);
-  Serial.print(F(" rel=")); Serial.print(setupRelPos);
-  Serial.print(F(" relMin=")); Serial.print(cfg.servo[setupServo].relMin);
-  Serial.print(F(" relMax=")); Serial.println(cfg.servo[setupServo].relMax);
+void setupTelemetryStore(const __FlashStringHelper *src, int8_t storeCmd)
+{
+  Serial.print(F("ACK_SETUP_STORE src="));
+  Serial.print(src);
+  Serial.print(F(" servo="));
+  Serial.print(setupServo + 1);
+  Serial.print(F(" cmd="));
+  Serial.print(storeCmd);
+  Serial.print(F(" rel="));
+  Serial.print(setupRelPos);
+  Serial.print(F(" relMin="));
+  Serial.print(cfg.servo[setupServo].relMin);
+  Serial.print(F(" relMax="));
+  Serial.println(cfg.servo[setupServo].relMax);
 }
 
-void setupTelemetryStoreReject(const __FlashStringHelper* src, int8_t storeCmd, uint8_t sxServo, bool guardActive, bool edgeActive, bool sessionOk) {
-  Serial.print(F("ACK_SETUP_STORE_REJECT src=")); Serial.print(src);
-  Serial.print(F(" cmd=")); Serial.print(storeCmd);
-  Serial.print(F(" sxServo=")); Serial.print((int)sxServo + 1);
-  Serial.print(F(" setupServo=")); Serial.print((int)setupServo + 1);
-  Serial.print(F(" rel=")); Serial.print(setupRelPos);
-  Serial.print(F(" guard=")); Serial.print(guardActive ? 1 : 0);
-  Serial.print(F(" edge=")); Serial.print(edgeActive ? 1 : 0);
-  Serial.print(F(" sessionOk=")); Serial.println(sessionOk ? 1 : 0);
+void setupTelemetryStoreReject(const __FlashStringHelper *src, int8_t storeCmd, uint8_t sxServo, bool guardActive, bool edgeActive, bool sessionOk)
+{
+  Serial.print(F("ACK_SETUP_STORE_REJECT src="));
+  Serial.print(src);
+  Serial.print(F(" cmd="));
+  Serial.print(storeCmd);
+  Serial.print(F(" sxServo="));
+  Serial.print((int)sxServo + 1);
+  Serial.print(F(" setupServo="));
+  Serial.print((int)setupServo + 1);
+  Serial.print(F(" rel="));
+  Serial.print(setupRelPos);
+  Serial.print(F(" guard="));
+  Serial.print(guardActive ? 1 : 0);
+  Serial.print(F(" edge="));
+  Serial.print(edgeActive ? 1 : 0);
+  Serial.print(F(" sessionOk="));
+  Serial.println(sessionOk ? 1 : 0);
 }
 
-void emitHello() {
-  Serial.print(F("HELLO decoder=")); Serial.print(FW_DECODER_TYPE);
-  Serial.print(F(" fw=")); Serial.print(FW_VERSION);
-  Serial.print(F(" proto=")); Serial.println(FW_PROTO);
+void emitHello()
+{
+  Serial.print(F("HELLO decoder="));
+  Serial.print(FW_DECODER_TYPE);
+  Serial.print(F(" fw="));
+  Serial.print(FW_VERSION);
+  Serial.print(F(" proto="));
+  Serial.println(FW_PROTO);
 }
 
-void emitCfgDump() {
-  Serial.print(F("CFG_HDR decoder=")); Serial.print(FW_DECODER_TYPE);
-  Serial.print(F(" fw=")); Serial.print(FW_VERSION);
-  Serial.print(F(" sxA=")); Serial.print(cfg.sxAddrA);
-  Serial.print(F(" sxB=")); Serial.println(cfg.sxAddrB);
-  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
-    Serial.print(F("CFG_S servo=")); Serial.print(i + 1);
-    Serial.print(F(" zero=")); Serial.print(cfg.servo[i].zeroPhys);
-    Serial.print(F(" relMin=")); Serial.print(cfg.servo[i].relMin);
-    Serial.print(F(" relMax=")); Serial.print(cfg.servo[i].relMax);
-    Serial.print(F(" divLeft=")); Serial.println(cfg.servo[i].divergingIsLeft);
+void emitCfgDump()
+{
+  Serial.print(F("CFG_HDR decoder="));
+  Serial.print(FW_DECODER_TYPE);
+  Serial.print(F(" fw="));
+  Serial.print(FW_VERSION);
+  Serial.print(F(" sxA="));
+  Serial.print(cfg.sxAddrA);
+  Serial.print(F(" sxB="));
+  Serial.println(cfg.sxAddrB);
+  for (uint8_t i = 0; i < SERVO_COUNT; i++)
+  {
+    Serial.print(F("CFG_S servo="));
+    Serial.print(i + 1);
+    Serial.print(F(" zero="));
+    Serial.print(cfg.servo[i].zeroPhys);
+    Serial.print(F(" relMin="));
+    Serial.print(cfg.servo[i].relMin);
+    Serial.print(F(" relMax="));
+    Serial.print(cfg.servo[i].relMax);
+    Serial.print(F(" divLeft="));
+    Serial.println(cfg.servo[i].divergingIsLeft);
   }
   Serial.println(F("CFG_END"));
 }
 
-void setupSelectServo(uint8_t ch) {
-  if (ch >= SERVO_COUNT) ch = SERVO_COUNT - 1;
+void setupSelectServo(uint8_t ch)
+{
+  if (ch >= SERVO_COUNT)
+    ch = SERVO_COUNT - 1;
   setupServo = ch;
   setupRelPos = 0;
   setServoRel(setupServo, setupRelPos);
-  Serial.print(F("\nServo S")); Serial.print(setupServo + 1);
+  Serial.print(F("\nServo S"));
+  Serial.print(setupServo + 1);
   Serial.println(F(" aktiv, Mitte angefahren (rel 0)."));
   setupTelemetryState(F("core"), F("select"));
 }
 
-void setupMoveRel(int16_t delta) {
+void setupMoveRel(int16_t delta)
+{
   setupRelPos += delta;
-  if (setupRelPos < -90) setupRelPos = -90;
-  if (setupRelPos > 90) setupRelPos = 90;
+  if (setupRelPos < -90)
+    setupRelPos = -90;
+  if (setupRelPos > 90)
+    setupRelPos = 90;
 
   int16_t phys = cfg.servo[setupServo].zeroPhys + setupRelPos;
-  if (phys < 0) phys = 0;
-  if (phys > 180) phys = 180;
+  if (phys < 0)
+    phys = 0;
+  if (phys > 180)
+    phys = 180;
   setServoRawPhys(setupServo, (uint8_t)phys);
 
-  Serial.print(F("S")); Serial.print(setupServo + 1);
-  Serial.print(F(" rel=")); Serial.println(setupRelPos);
+  Serial.print(F("S"));
+  Serial.print(setupServo + 1);
+  Serial.print(F(" rel="));
+  Serial.println(setupRelPos);
 }
 
-void setupAck(uint8_t v) {
-  while (sx.set(SX_CHAN_SETUP_ACK, v) != 0) delay(2);
+void setupAck(uint8_t v)
+{
+  while (sx.set(SX_CHAN_SETUP_ACK, v) != 0)
+    delay(2);
 }
 
-bool setupValidateAll() {
-  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
-    if (cfg.servo[i].relMin >= cfg.servo[i].relMax) return false;
+bool setupValidateAll()
+{
+  for (uint8_t i = 0; i < SERVO_COUNT; i++)
+  {
+    if (cfg.servo[i].relMin >= cfg.servo[i].relMax)
+      return false;
   }
   return true;
 }
 
-void startInitialSetup(bool fromSxWizard = false) {
+void startInitialSetup(bool fromSxWizard = false)
+{
   // Servo-Setup und klassischer Modul-Programmiermodus (lokale Prog-Taste)
   // duerfen nicht parallel aktiv bleiben. Wenn Qt nach lokaler Prog-Taste
   // automatisch 's' sendet, wird damit bewusst in den Servo-Setup-Wizard
@@ -442,81 +574,179 @@ void startInitialSetup(bool fromSxWizard = false) {
   sxSetupLastServo = fromSxWizard ? sx.get(SX_CHAN_SETUP_SERVO) : 0;
   sxSetupLastMove = fromSxWizard ? sx.get(SX_CHAN_SETUP_MOVE) : 0;
   sxSetupLastStore = fromSxWizard ? sx.get(SX_CHAN_SETUP_STORE) : 0;
-  if (!fromSxWizard) printSetupHelp();
+  if (!fromSxWizard)
+    printSetupHelp();
   setupSelectServo(0);
   setupAck(1);
 }
 
-void processSetupSerial() {
-  while (Serial.available() > 0) {
+void processSetupSerial()
+{
+  while (Serial.available() > 0)
+  {
     char c = (char)Serial.read();
-    if (c == '\r' || c == '\n' || c == ' ') continue;
+    if (c == '\r' || c == '\n' || c == ' ')
+      continue;
 
-    switch (c) {
-      case 'n': setupSelectServo((setupServo + 1) % SERVO_COUNT); break;
-      case 'v': setupSelectServo((setupServo == 0) ? (SERVO_COUNT - 1) : (setupServo - 1)); break;
-      case '0': setupRelPos = 0; setServoRel(setupServo, setupRelPos); Serial.println(F("Mitte (rel 0).")); setupTelemetryState(F("serial"), F("mid")); break;
-      case 'l':
-        cfg.servo[setupServo].relMin = setupRelPos;
-        Serial.print(F("S")); Serial.print(setupServo + 1);
-        Serial.print(F(" relMin gespeichert: ")); Serial.println(cfg.servo[setupServo].relMin);
-        setupTelemetryStore(F("serial"), 1);
-        break;
-      case 'r':
-        cfg.servo[setupServo].relMax = setupRelPos;
-        Serial.print(F("S")); Serial.print(setupServo + 1);
-        Serial.print(F(" relMax gespeichert: ")); Serial.println(cfg.servo[setupServo].relMax);
-        setupTelemetryStore(F("serial"), 2);
-        break;
-      case '1': setupStep = 1; Serial.println(F("Schrittweite=1")); break;
-      case '2': setupStep = 2; Serial.println(F("Schrittweite=2")); break;
-      case '5': setupStep = 5; Serial.println(F("Schrittweite=5")); break;
-      case 'a': setupStep = 10; Serial.println(F("Schrittweite=10")); break;
-      case 'b': setupStep = 20; Serial.println(F("Schrittweite=20")); break;
-      case '+': { int16_t b=setupRelPos; setupMoveRel(setupStep); setupTelemetryMove(F("serial"), setupStep, 2, b, setupRelPos); } break;
-      case '-': { int16_t b=setupRelPos; setupMoveRel(-setupStep); setupTelemetryMove(F("serial"), setupStep, 1, b, setupRelPos); } break;
-      case 'w': {
-        bool ok = setupValidateAll();
-        if (!ok) {
-          setupAck(2);
-          Serial.println(F("FEHLER: mindestens ein Servo hat relMin >= relMax. Nicht gespeichert."));
-        } else {
-          saveConfig();
-          setupMode = false;
-          digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
-          setupAck(1);
-          Serial.println(F("Setup gespeichert, beendet."));
-        }
-      } break;
-      case 'x':
+    switch (c)
+    {
+    case 'n':
+      setupSelectServo((setupServo + 1) % SERVO_COUNT);
+      break;
+    case 'v':
+      setupSelectServo((setupServo == 0) ? (SERVO_COUNT - 1) : (setupServo - 1));
+      break;
+    case '0':
+      setupRelPos = 0;
+      setServoRel(setupServo, setupRelPos);
+      Serial.println(F("Mitte (rel 0)."));
+      setupTelemetryState(F("serial"), F("mid"));
+      break;
+    case 'l':
+      cfg.servo[setupServo].relMin = setupRelPos;
+      Serial.print(F("S"));
+      Serial.print(setupServo + 1);
+      Serial.print(F(" relMin gespeichert: "));
+      Serial.println(cfg.servo[setupServo].relMin);
+      setupTelemetryStore(F("serial"), 1);
+      break;
+    case 'r':
+      cfg.servo[setupServo].relMax = setupRelPos;
+      Serial.print(F("S"));
+      Serial.print(setupServo + 1);
+      Serial.print(F(" relMax gespeichert: "));
+      Serial.println(cfg.servo[setupServo].relMax);
+      setupTelemetryStore(F("serial"), 2);
+      break;
+    case '1':
+      setupStep = 1;
+      Serial.println(F("Schrittweite=1"));
+      break;
+    case '2':
+      setupStep = 2;
+      Serial.println(F("Schrittweite=2"));
+      break;
+    case '5':
+      setupStep = 5;
+      Serial.println(F("Schrittweite=5"));
+      break;
+    case 'a':
+    case 'A':
+    {
+      int16_t relBefore = setupRelPos;
+
+      // a = Abzweig anfahren
+      if (cfg.servo[setupServo].divergingIsLeft)
+      {
+        setupRelPos = cfg.servo[setupServo].relMin;
+      }
+      else
+      {
+        setupRelPos = cfg.servo[setupServo].relMax;
+      }
+
+      setServoRel(setupServo, setupRelPos);
+
+      Serial.print(F("S"));
+      Serial.print(setupServo + 1);
+      Serial.print(F(" Abzweig angefahren, rel="));
+      Serial.println(setupRelPos);
+
+      setupTelemetryMove(F("serial"), 0, 4, relBefore, setupRelPos);
+    }
+    break;
+
+    case 'g':
+    case 'G':
+    {
+      int16_t relBefore = setupRelPos;
+
+      // g = Gerade anfahren
+      if (cfg.servo[setupServo].divergingIsLeft)
+      {
+        setupRelPos = cfg.servo[setupServo].relMax;
+      }
+      else
+      {
+        setupRelPos = cfg.servo[setupServo].relMin;
+      }
+
+      setServoRel(setupServo, setupRelPos);
+
+      Serial.print(F("S"));
+      Serial.print(setupServo + 1);
+      Serial.print(F(" Gerade angefahren, rel="));
+      Serial.println(setupRelPos);
+
+      setupTelemetryMove(F("serial"), 0, 5, relBefore, setupRelPos);
+    }
+    break;
+    case '+':
+    {
+      int16_t b = setupRelPos;
+      setupMoveRel(setupStep);
+      setupTelemetryMove(F("serial"), setupStep, 2, b, setupRelPos);
+    }
+    break;
+    case '-':
+    {
+      int16_t b = setupRelPos;
+      setupMoveRel(-setupStep);
+      setupTelemetryMove(F("serial"), setupStep, 1, b, setupRelPos);
+    }
+    break;
+
+    case 'w':
+    {
+      bool ok = setupValidateAll();
+      if (!ok)
+      {
+        setupAck(2);
+        Serial.println(F("FEHLER: mindestens ein Servo hat relMin >= relMax. Nicht gespeichert."));
+      }
+      else
+      {
+        saveConfig();
         setupMode = false;
         digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
-        setupAck(0);
-        Serial.println(F("Setup beendet ohne Speichern."));
-        break;
-      case 'h':
-      case '?':
-        printSetupHelp();
-        break;
-      case 'c':
-        emitCfgDump();
-        break;
-      case 't':
-        emitHello();
-        break;
-      default:
-        // Unbekannte/Steuerzeichen ignorieren (z.B. Bus-/Terminal-Noise)
-        break;
+        setupAck(1);
+        Serial.println(F("Setup gespeichert, beendet."));
+      }
+    }
+    break;
+    case 'x':
+      setupMode = false;
+      digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
+      setupAck(0);
+      Serial.println(F("Setup beendet ohne Speichern."));
+      break;
+    case 'h':
+    case '?':
+      printSetupHelp();
+      break;
+    case 'c':
+      emitCfgDump();
+      break;
+    case 't':
+      emitHello();
+      break;
+    default:
+      // Unbekannte/Steuerzeichen ignorieren (z.B. Bus-/Terminal-Noise)
+      break;
     }
   }
 }
 
-bool keypressed() {
-  if ((millis() - keyPressTime) < (5UL * DEBOUNCETIME)) return false;
+bool keypressed()
+{
+  if ((millis() - keyPressTime) < (5UL * DEBOUNCETIME))
+    return false;
 
-  if (KEYPRESS) {
+  if (KEYPRESS)
+  {
     delay(DEBOUNCETIME);
-    if (KEYPRESS) {
+    if (KEYPRESS)
+    {
       keyPressTime = millis();
       return true;
     }
@@ -524,20 +754,26 @@ bool keypressed() {
   return false;
 }
 
-void startModuleProgramming() {
+void startModuleProgramming()
+{
   programming = true;
   keyPressTime = millis();
   digitalWrite(PROGLED, HIGH);
   Serial.println(F("PROG_STATUS active=1 source=local_button track=0 led=1"));
 
   // aktuelle Werte auf Programmierkanäle legen
-  while (sx.set(SX_CHAN_ADDR_A, cfg.sxAddrA) != 0) delay(10);
-  while (sx.set(SX_CHAN_ADDR_B, cfg.sxAddrB) != 0) delay(10);
-  while (sx.set(SX_CHAN_ORIENT_L, getOrientationMaskLow()) != 0) delay(10);
-  while (sx.set(SX_CHAN_ORIENT_H, getOrientationMaskHigh()) != 0) delay(10);
+  while (sx.set(SX_CHAN_ADDR_A, cfg.sxAddrA) != 0)
+    delay(10);
+  while (sx.set(SX_CHAN_ADDR_B, cfg.sxAddrB) != 0)
+    delay(10);
+  while (sx.set(SX_CHAN_ORIENT_L, getOrientationMaskLow()) != 0)
+    delay(10);
+  while (sx.set(SX_CHAN_ORIENT_H, getOrientationMaskHigh()) != 0)
+    delay(10);
 }
 
-void finishModuleProgramming() {
+void finishModuleProgramming()
+{
   programming = false;
 
   uint8_t newA = sx.get(SX_CHAN_ADDR_A);
@@ -548,13 +784,18 @@ void finishModuleProgramming() {
   uint8_t candA = cfg.sxAddrA;
   uint8_t candB = cfg.sxAddrB;
 
-  if (validOrDisabledSxAddr(newA)) candA = newA;
-  if (validOrDisabledSxAddr(newB)) candB = newB;
+  if (validOrDisabledSxAddr(newA))
+    candA = newA;
+  if (validOrDisabledSxAddr(newB))
+    candB = newB;
 
   // Sicherheit: nie beide Adressen deaktivieren
-  if (!sxAddrEnabled(candA) && !sxAddrEnabled(candB)) {
+  if (!sxAddrEnabled(candA) && !sxAddrEnabled(candB))
+  {
     // falls beide 0 wurden, Konfiguration unverändert lassen
-  } else {
+  }
+  else
+  {
     cfg.sxAddrA = candA;
     cfg.sxAddrB = candB;
   }
@@ -569,12 +810,14 @@ void finishModuleProgramming() {
 }
 
 // ---------- SX ISR ----------
-void sxisr() {
+void sxisr()
+{
   sx.isr();
 }
 
 // ---------- Setup / Loop ----------
-void setup() {
+void setup()
+{
   Serial.begin(115200);
 
   pinMode(PROGLED, OUTPUT);
@@ -588,20 +831,23 @@ void setup() {
   delay(10);
 
   bool loadedFromEeprom = loadConfig();
-  if (!loadedFromEeprom) {
+  if (!loadedFromEeprom)
+  {
     setDefaults();
     saveConfig();
   }
 
   Serial.println();
   Serial.println(F("SX30 ServoDecoder start"));
-  Serial.print(F("FW-Version: SX30-ServoDecoder ")); Serial.println(FW_VERSION);
+  Serial.print(F("FW-Version: SX30-ServoDecoder "));
+  Serial.println(FW_VERSION);
   emitHello();
   Serial.println(loadedFromEeprom ? F("CFG: aus EEPROM geladen") : F("CFG: Defaults genutzt"));
   Serial.println(F("Setup starten: 's' senden"));
 
   // Beim Start zuerst alle auf Mitte (rel 0), bewusst nacheinander
-  for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+  for (uint8_t i = 0; i < SERVO_COUNT; i++)
+  {
     setServoRel(i, 0);
     delay(SERVO_SWITCH_INTERVAL_MS);
   }
@@ -617,17 +863,22 @@ void setup() {
   applyAllFromSx(oldDataA, oldDataB, useA, useB);
 }
 
-void processSetupSxWizard() {
+void processSetupSxWizard()
+{
   const unsigned long nowMs = millis();
-  if (nowMs < sxPostEndIgnoreUntilMs) return;
+  if (nowMs < sxPostEndIgnoreUntilMs)
+    return;
 
-  auto normCmd = [](uint8_t raw)->uint8_t {
+  auto normCmd = [](uint8_t raw) -> uint8_t
+  {
     return (raw <= 3) ? raw : 0;
   };
-  auto normMove = [](uint8_t raw)->uint8_t {
+  auto normMove = [](uint8_t raw) -> uint8_t
+  {
     return (raw <= 3) ? raw : 0;
   };
-  auto normStore = [](uint8_t raw)->uint8_t {
+  auto normStore = [](uint8_t raw) -> uint8_t
+  {
     return (raw <= 2) ? raw : 0;
   };
 
@@ -642,54 +893,76 @@ void processSetupSxWizard() {
   uint8_t store = normStore(rawStore);
 
   uint8_t prevZeroStable = sxCmdZeroStableCount;
-  if (cmd == 0) {
-    if (sxCmdZeroStableCount < 255) sxCmdZeroStableCount++;
-  } else {
+  if (cmd == 0)
+  {
+    if (sxCmdZeroStableCount < 255)
+      sxCmdZeroStableCount++;
+  }
+  else
+  {
     sxCmdZeroStableCount = 0;
   }
 
   // Start nur akzeptieren, wenn Session gesetzt + K15-Freigabe aktiv + K1 plausibel
   // und vorher cmd=0 einige Zyklen stabil war (Edge-Detektor gegen raw=85-Flattern)
-  if (cmd == 1) {
+  if (cmd == 1)
+  {
     bool startValid = (sxSession != 0) && (k15 == 1) && (k1AddrA == cfg.sxAddrA) && (prevZeroStable >= 2);
-    if (startValid) {
+    if (startValid)
+    {
       sxActiveSessionId = sxSession;
-    } else {
+    }
+    else
+    {
       return;
     }
   }
 
   // Fuer alle weiteren Wizard-Befehle muss die aktive Session exakt passen
-  if (sxActiveSessionId == 0 || sxSession != sxActiveSessionId) {
+  if (sxActiveSessionId == 0 || sxSession != sxActiveSessionId)
+  {
     return;
   }
 
   // CMD nur als entprellte Impulsflanke akzeptieren: erst cmd=0 armt erneut
   // plus Cooldown gegen spaete Wiederholimpulse (raw=85-Muster)
-  if (cmd == 0) {
+  if (cmd == 0)
+  {
     sxCmdArmed = true;
-  } else if (sxCmdArmed && millis() >= sxCmdCooldownUntilMs) {
-    Serial.print(F("ACK_SETUP_CMD src=sx raw=")); Serial.print(rawCmd);
-    Serial.print(F(" cmd=")); Serial.println(cmd);
+  }
+  else if (sxCmdArmed && millis() >= sxCmdCooldownUntilMs)
+  {
+    Serial.print(F("ACK_SETUP_CMD src=sx raw="));
+    Serial.print(rawCmd);
+    Serial.print(F(" cmd="));
+    Serial.println(cmd);
     sxCmdArmed = false;
     sxSetupLastCmd = cmd;
     sxCmdCooldownUntilMs = millis() + 700;
-    if (cmd == 1) {
+    if (cmd == 1)
+    {
       startInitialSetup(true);
       sxLockedServo = (int8_t)sx.get(SX_CHAN_SETUP_SERVO);
-      if (sxLockedServo < 0 || sxLockedServo >= SERVO_COUNT) sxLockedServo = setupServo;
-      if ((uint8_t)sxLockedServo != setupServo) setupSelectServo((uint8_t)sxLockedServo);
+      if (sxLockedServo < 0 || sxLockedServo >= SERVO_COUNT)
+        sxLockedServo = setupServo;
+      if ((uint8_t)sxLockedServo != setupServo)
+        setupSelectServo((uint8_t)sxLockedServo);
       sxGuardUntilMs = millis() + 400; // nur kurz danach Move/Store akzeptieren
       setupAck(1);
-    } else if (cmd == 2) {
+    }
+    else if (cmd == 2)
+    {
       setupMode = false;
       digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
       sxActiveSessionId = 0;
       sxLockedServo = -1;
       sxPostEndIgnoreUntilMs = millis() + 1000;
       setupAck(0);
-    } else if (cmd == 3) {
-      if (setupValidateAll()) {
+    }
+    else if (cmd == 3)
+    {
+      if (setupValidateAll())
+      {
         saveConfig();
         setupMode = false;
         digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
@@ -697,69 +970,109 @@ void processSetupSxWizard() {
         sxLockedServo = -1;
         sxPostEndIgnoreUntilMs = millis() + 1000;
         setupAck(1);
-      } else {
+      }
+      else
+      {
         setupAck(2);
       }
     }
   }
 
-  if (!setupMode) return;
+  if (!setupMode)
+    return;
 
   uint8_t sxServo = sx.get(SX_CHAN_SETUP_SERVO);
-  if (sxServo >= SERVO_COUNT) sxServo = SERVO_COUNT - 1;
-  if (sxLockedServo >= 0) sxServo = (uint8_t)sxLockedServo;
-  if (sxServo != sxSetupLastServo) {
+  if (sxServo >= SERVO_COUNT)
+    sxServo = SERVO_COUNT - 1;
+  if (sxLockedServo >= 0)
+    sxServo = (uint8_t)sxLockedServo;
+  if (sxServo != sxSetupLastServo)
+  {
     sxSetupLastServo = sxServo;
-    if (sxServo != setupServo) {
+    if (sxServo != setupServo)
+    {
       setupSelectServo(sxServo);
       setupAck(1);
     }
   }
 
   uint8_t sxStep = sx.get(SX_CHAN_SETUP_STEP);
-  if (sxStep == 1 || sxStep == 2 || sxStep == 5 || sxStep == 10 || sxStep == 20) setupStep = sxStep;
+  if (sxStep == 1 || sxStep == 2 || sxStep == 5 || sxStep == 10 || sxStep == 20)
+    setupStep = sxStep;
 
   // Nur 0->Befehl Flanken akzeptieren (robust gegen Bus-Jitter/Mehrfachtelegramme)
-  if (move != sxSetupLastMove) {
-    if (sxSetupLastMove == 0 && millis() <= sxGuardUntilMs) {
+  if (move != sxSetupLastMove)
+  {
+    if (sxSetupLastMove == 0 && millis() <= sxGuardUntilMs)
+    {
       // SX-Wizard-Richtung: im Feldtest war + aus Qt effektiv invertiert.
       // Daher fuer SX-Pfad 1/2 gespiegelt behandeln.
-      if (move == 1) { int16_t b=setupRelPos; setupMoveRel(setupStep); setupTelemetryMove(F("sx"), setupStep, 1, b, setupRelPos); setupAck(1); }
-      else if (move == 2) { int16_t b=setupRelPos; setupMoveRel(-setupStep); setupTelemetryMove(F("sx"), setupStep, 2, b, setupRelPos); setupAck(1); }
-      else if (move == 3) { int16_t b=setupRelPos; setupRelPos = 0; setServoRel(setupServo, 0); setupTelemetryMove(F("sx"), setupStep, 3, b, setupRelPos); setupTelemetryState(F("sx"), F("mid")); setupAck(1); }
+      if (move == 1)
+      {
+        int16_t b = setupRelPos;
+        setupMoveRel(setupStep);
+        setupTelemetryMove(F("sx"), setupStep, 1, b, setupRelPos);
+        setupAck(1);
+      }
+      else if (move == 2)
+      {
+        int16_t b = setupRelPos;
+        setupMoveRel(-setupStep);
+        setupTelemetryMove(F("sx"), setupStep, 2, b, setupRelPos);
+        setupAck(1);
+      }
+      else if (move == 3)
+      {
+        int16_t b = setupRelPos;
+        setupRelPos = 0;
+        setServoRel(setupServo, 0);
+        setupTelemetryMove(F("sx"), setupStep, 3, b, setupRelPos);
+        setupTelemetryState(F("sx"), F("mid"));
+        setupAck(1);
+      }
     }
     sxSetupLastMove = move;
   }
 
-  if (store != sxSetupLastStore) {
+  if (store != sxSetupLastStore)
+  {
     bool edgeActive = (sxSetupLastStore == 0);
     bool guardActive = (millis() <= sxGuardUntilMs);
     bool sessionOk = (sxActiveSessionId != 0);
     bool servoMatch = (sxServo == setupServo);
-    if (edgeActive && guardActive && servoMatch) {
-      if (store == 1) {
+    if (edgeActive && guardActive && servoMatch)
+    {
+      if (store == 1)
+      {
         cfg.servo[setupServo].relMin = setupRelPos;
         setupTelemetryStore(F("sx"), 1);
         setupAck(1);
-      } else if (store == 2) {
+      }
+      else if (store == 2)
+      {
         cfg.servo[setupServo].relMax = setupRelPos;
         setupTelemetryStore(F("sx"), 2);
         setupAck(1);
       }
-    } else if (store == 1 || store == 2) {
+    }
+    else if (store == 1 || store == 2)
+    {
       setupTelemetryStoreReject(F("sx"), store, sxServo, guardActive, edgeActive, sessionOk);
     }
     sxSetupLastStore = store;
   }
 }
 
-void loop() {
+void loop()
+{
   processSetupSxWizard();
 
-  if (setupMode) {
+  if (setupMode)
+  {
     // Während aktivem Servo-Setup muss ein erneuter lokaler Tastendruck den Modus
     // sauber beenden können (D13 aus, Track wieder EIN, Statuszeile senden).
-    if (keypressed()) {
+    if (keypressed())
+    {
       setupMode = false;
       setupBySxWizard = false;
       sxActiveSessionId = 0;
@@ -780,19 +1093,25 @@ void loop() {
   }
 
   // Setup-Trigger jederzeit per seriell
-  while (Serial.available() > 0) {
+  while (Serial.available() > 0)
+  {
     char c = (char)Serial.read();
-    if (c == '\r' || c == '\n' || c == ' ') continue;
-    Serial.print(F("RX:")); Serial.println(c);
-    if (c == 's' || c == 'S') {
+    if (c == '\r' || c == '\n' || c == ' ')
+      continue;
+    Serial.print(F("RX:"));
+    Serial.println(c);
+    if (c == 's' || c == 'S')
+    {
       startInitialSetup(false);
       return;
     }
-    if (c == 't' || c == 'T') {
+    if (c == 't' || c == 'T')
+    {
       emitHello();
       continue;
     }
-    if (c == 'c' || c == 'C') {
+    if (c == 'c' || c == 'C')
+    {
       emitCfgDump();
       continue;
     }
@@ -805,10 +1124,13 @@ void loop() {
   uint8_t dB = useB ? sx.get(cfg.sxAddrB) : oldDataB;
 
   bool changed = false;
-  if (useA && dA != oldDataA) changed = true;
-  if (useB && dB != oldDataB) changed = true;
+  if (useA && dA != oldDataA)
+    changed = true;
+  if (useB && dB != oldDataB)
+    changed = true;
 
-  if (changed) {
+  if (changed)
+  {
     applyAllFromSx(dA, dB, useA, useB);
   }
 
@@ -819,9 +1141,12 @@ void loop() {
   uint8_t track = sx.getTrackBit();
 
   // Selectrix-Regel: bei Gleis EIN darf Prog-LED nicht aktiv bleiben.
-  if (track) {
-    if (programming) finishModuleProgramming();
-    if (setupMode) {
+  if (track)
+  {
+    if (programming)
+      finishModuleProgramming();
+    if (setupMode)
+    {
       setupMode = false;
       setupBySxWizard = false;
       sxActiveSessionId = 0;
@@ -830,14 +1155,19 @@ void loop() {
     digitalWrite(PROGLED, LOW);
   }
 
-  if (programming) {
-    if (track || keypressed()) {
+  if (programming)
+  {
+    if (track || keypressed())
+    {
       // Ende Programmiermodus bei Track EIN oder erneutem Tastendruck
       finishModuleProgramming();
     }
-  } else {
+  }
+  else
+  {
     // Start Programmiermodus nur bei Track AUS und Tastendruck
-    if ((track == 0) && keypressed()) {
+    if ((track == 0) && keypressed())
+    {
       startModuleProgramming();
     }
   }

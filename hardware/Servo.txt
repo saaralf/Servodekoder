@@ -1,0 +1,28 @@
+Stückliste exportiert aus /opt/programme/selectrix/Servodekoder/hardware/Servo.sch am 31.05.26 19:53
+
+Part Value     Device                    Package    Description                                    MF MPN OC_FARNELL OC_NEWARK POPULARITY SPICEPREFIX
+C1   10uF      CAP_CERAMIC0805-NOOUTLINE 0805-NO    Ceramic Capacitors                                                                               
+C2   1000µF    CPOL-USE3.5-8             E3,5-8     POLARIZED CAPACITOR, American symbol                                                             
+JP1  J1        MA20-1                    MA20-1     PIN HEADER                                            unknown    unknown                         
+JP2  J2        MA20-1                    MA20-1     PIN HEADER                                            unknown    unknown                         
+Q2   IRLML6401 MOSFET-PWIDE              SOT23-WIDE P-Channel Mosfet                                                                                 
+R2   220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R3   220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R4   220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R5   220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R6   220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R7   10K       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R8   220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R9   10K       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R10  10K       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R11  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R12  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R13  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R14  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R15  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R16  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R17  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R18  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R19  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+R20  220       R-EU_M0805                M0805      RESISTOR, European symbol                                                  45         R          
+U1   PCA9685   PCA9685                   TSSOP28    PCA9685 - 16 Channel 12-Bit I2C PWM Controller                                                   

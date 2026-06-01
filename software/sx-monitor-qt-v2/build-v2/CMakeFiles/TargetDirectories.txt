@@ -1,0 +1,12 @@
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/CMakeFiles/edit_cache.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/CMakeFiles/rebuild_cache.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v2/CMakeFiles/sx_monitor_qt_v2.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v2/CMakeFiles/edit_cache.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v2/CMakeFiles/rebuild_cache.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v2/CMakeFiles/sx_monitor_qt_v2_autogen_timestamp_deps.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v2/CMakeFiles/sx_monitor_qt_v2_autogen.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v3/CMakeFiles/sx_monitor_qt_v3.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v3/CMakeFiles/edit_cache.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v3/CMakeFiles/rebuild_cache.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v3/CMakeFiles/sx_monitor_qt_v3_autogen_timestamp_deps.dir
+/opt/programme/selectrix/Servodekoder/software/sx-monitor-qt-v2/build-v2/app-v3/CMakeFiles/sx_monitor_qt_v3_autogen.dir
