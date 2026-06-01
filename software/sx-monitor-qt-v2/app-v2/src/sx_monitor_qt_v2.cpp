@@ -25,18 +25,22 @@
 #include <QImage>
 #include <QTabWidget>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
+#include <QTextStream>
 #include <QRegularExpression>
 #include <QElapsedTimer>
 #include <QProcess>
 #include <QRandomGenerator>
 #include <algorithm>
+#include "sx_bus_bridge.h"
+#include "sx_runtime.h"
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <termios.h>
 
-static const char* APP_VERSION = "2026-05-09-main";
+static const char* APP_VERSION = "2026-05-12-logfile";
 
 static QString detectGitVersion(){
     QProcess p;
@@ -70,6 +74,7 @@ static bool set_serial(int fd, int baud){
     return tcsetattr(fd,TCSANOW,&tty)==0;
 }
 static bool wr2(int fd, uint8_t a, uint8_t d){ uint8_t b[2]={a,d}; return write(fd,b,2)==2; }
+static bool wr1(int fd, uint8_t b){ return write(fd,&b,1)==1; }
 
 static QString autodetectSelectrixPort(){
     QDir byid("/dev/serial/by-id");
@@ -216,9 +221,9 @@ public:
         auto *cfg = new QGroupBox("Interface / Zentrale (nach SX1-Doku)");
         auto *cfgL = new QHBoxLayout(cfg);
         ifaceBox = new QComboBox; ifaceBox->addItems({"SLX852"});
-        busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"});
-        const QString sxAuto = autodetectSelectrixPort();
-        portEdit = new QLineEdit(displayPortWithHint(sxAuto));
+        backendBox = new QComboBox; backendBox->addItems({"SX","RMX"});
+        busBox = new QComboBox; busBox->addItems({"SX0","SX1","SX0+SX1"}); // Labels werden backend-abhängig aktualisiert
+        portEdit = new QLineEdit("daemon:///tmp/sxbusd_sx.sock");
         baudBox = new QComboBox;
         baudBox->addItems({"9600","19200","38400","57600","115200"});
         baudBox->setCurrentText("57600");
@@ -228,11 +233,22 @@ public:
         disconnectBtn = new QPushButton("Disconnect"); disconnectBtn->setEnabled(false);
         statusLbl = new QLabel("offline");
         cfgL->addWidget(new QLabel("Interface:")); cfgL->addWidget(ifaceBox);
+        cfgL->addWidget(new QLabel("Backend:")); cfgL->addWidget(backendBox);
         cfgL->addWidget(new QLabel("Busse:")); cfgL->addWidget(busBox);
         cfgL->addWidget(new QLabel("Port:")); cfgL->addWidget(portEdit);
         cfgL->addWidget(new QLabel("Baud:")); cfgL->addWidget(baudBox);
         cfgL->addWidget(bitOrderBox);
         cfgL->addWidget(connectBtn); cfgL->addWidget(disconnectBtn);
+        trackIconLbl = new QLabel("Gleis");
+        trackIconLbl->setStyleSheet("QLabel { font-weight:600; }");
+        trackStateLbl = new QLabel("UNBEKANNT");
+        trackStateLbl->setAlignment(Qt::AlignCenter);
+        trackStateLbl->setFixedSize(90, 24);
+        trackStateLbl->setStyleSheet("QLabel { background:#666; color:white; border:1px solid #333; border-radius:3px; font-weight:700; }");
+        trackTextLbl = new QLabel("Gleis: unbekannt");
+        cfgL->addWidget(trackIconLbl);
+        cfgL->addWidget(trackStateLbl);
+        cfgL->addWidget(trackTextLbl);
         cfgL->addWidget(statusLbl);
         root->addWidget(cfg);
 
@@ -247,7 +263,7 @@ public:
         teleReqHelloBtn = new QPushButton("HELLO (t)");
         teleReqCfgBtn = new QPushButton("CFG (c)");
         ackCfgFallbackBox = new QCheckBox("ACK CFG-Fallback (Notbetrieb)");
-        ackCfgFallbackBox->setChecked(false);
+        ackCfgFallbackBox->setChecked(true);
         teleDisconnectBtn->setEnabled(false);
         teleStatusLbl = new QLabel("telemetry offline");
         fwStatusLbl = new QLabel("FW: unbekannt");
@@ -297,7 +313,9 @@ public:
 
         logView = new QTextEdit; logView->setReadOnly(true);
         tabs->addTab(logView, "Änderungsprotokoll");
+        initLogFiles();
         appendLog(QString("SX-Monitor-Qt V2 gestartet | Version: %1").arg(appVersion));
+        appendLog(QString("Logdatei: %1 | Aktueller Lauf: %2").arg(latestLogPath, sessionLogPath));
 
         auto *progTab = new QWidget;
         auto *progL = new QVBoxLayout(progTab);
@@ -344,10 +362,10 @@ public:
             auto *bMid=new QPushButton("Mitte"); auto *bG=new QPushButton("Gerade"); auto *bA=new QPushButton("Abzweig"); auto *bC=new QPushButton("Commit");
             hl->addWidget(bMid); hl->addWidget(bG); hl->addWidget(bA); hl->addWidget(bC);
             servoTable->setCellWidget(s,5,w);
-            connect(bMid,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,13,3); appendLog(QString("SETUP Mitte S%1").arg(s+1)); });
-            connect(bG,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,14,1); appendLog(QString("SETUP L speichern S%1").arg(s+1)); });
-            connect(bA,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); sendSX(bus,14,2); appendLog(QString("SETUP R speichern S%1").arg(s+1)); });
-            connect(bC,&QPushButton::clicked,this,[this,s](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,s); appendLog(QString("SETUP Servo selektiert S%1").arg(s+1)); });
+            connect(bMid,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); sendSX(bus,13,3); appendLog(QString("SETUP Mitte S%1").arg(s+1)); });
+            connect(bG,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); sendSX(bus,14,1); appendLog(QString("SETUP L speichern S%1").arg(s+1)); });
+            connect(bA,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); sendSX(bus,14,2); appendLog(QString("SETUP R speichern S%1").arg(s+1)); });
+            connect(bC,&QPushButton::clicked,this,[this,s](){ int bus=effectiveWizardBus(); sendSX(bus,11,s); appendLog(QString("SETUP Servo selektiert S%1").arg(s+1)); });
         }
         progL->addWidget(servoTable);
 
@@ -375,6 +393,7 @@ public:
         progPathBox = new QComboBox;
         progPathBox->addItem("Serial-Wizard (empfohlen)");
         progPathBox->addItem("SX-Wizard (experimentell)");
+        progPathBox->setCurrentIndex(1); // Standard: wieder SX-Art Programmierung
         busRow->addWidget(new QLabel("Programmierweg:"));
         busRow->addWidget(progPathBox);
         busRow->addStretch(1);
@@ -517,7 +536,7 @@ public:
         quick255Btn = new QPushButton("255");
         confirmBox = new QCheckBox("Senden bestätigen");
         rxPauseBox = new QCheckBox("SX-Monitor RX pausieren (nur TX+Telemetrie)");
-        rxPauseBox->setChecked(true);
+        rxPauseBox->setChecked(false);
         bitButtonsBox = new QComboBox;
         bitButtonsBox->addItems({"Bitbuttons aus","Bitbuttons ein"});
 
@@ -538,6 +557,22 @@ public:
         connect(timer,&QTimer::timeout,this,&MainWin::pollSerial);
         connect(connectBtn,&QPushButton::clicked,this,&MainWin::doConnect);
         connect(disconnectBtn,&QPushButton::clicked,this,&MainWin::doDisconnect);
+        connect(backendBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){
+            const bool isRmx = backendBox && backendBox->currentText()=="RMX";
+            portEdit->setText(isRmx ? "daemon:///tmp/sxbusd_rmx.sock" : "daemon:///tmp/sxbusd_sx.sock");
+            if(baudBox) baudBox->setCurrentText(isRmx ? "57600" : "19200");
+            const QString keep = busBox ? busBox->currentText() : QString();
+            if(busBox){
+                busBox->blockSignals(true);
+                busBox->clear();
+                if(isRmx) busBox->addItems({"RMX0","RMX1","RMX0+RMX1"});
+                else busBox->addItems({"SX0","SX1","SX0+SX1"});
+                if(keep.endsWith("1")) busBox->setCurrentIndex(1);
+                else if(keep.contains('+')) busBox->setCurrentIndex(2);
+                else busBox->setCurrentIndex(0);
+                busBox->blockSignals(false);
+            }
+        });
         connect(teleConnectBtn,&QPushButton::clicked,this,&MainWin::doTeleConnect);
         connect(teleDisconnectBtn,&QPushButton::clicked,this,&MainWin::doTeleDisconnect);
         connect(teleReqHelloBtn,&QPushButton::clicked,this,[this](){ if(teleFd>=0){ ::write(teleFd,"t\n",2); appendLog("TEL TX: t"); } });
@@ -548,6 +583,15 @@ public:
         });
         ackModeLbl->setStyleSheet("QLabel { color: #0a8a0a; font-weight: bold; }");
         connect(sendBtn,&QPushButton::clicked,this,&MainWin::sendValue);
+        connect(sendAdr, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){
+            const bool blocked = isReservedAdr(v & 0x7F);
+            const bool wizardBlocked = useSerialWizard() && visualSetupStarted;
+            if(sendBtn) sendBtn->setEnabled(!blocked && !wizardBlocked);
+            if(sendBtn){
+                if(blocked) sendBtn->setToolTip("Reservierte/System-Adresse: Editieren deaktiviert");
+                else sendBtn->setToolTip(QString());
+            }
+        });
         connect(quick0Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(0); sendValue(); });
         connect(quick1Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(1); sendValue(); });
         connect(quick255Btn,&QPushButton::clicked,this,[this](){ sendVal->setValue(255); sendValue(); });
@@ -555,48 +599,86 @@ public:
         connect(visualAddrA, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrA->setValue(v); visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateVisualTitles(); });
         connect(visualAddrB, qOverload<int>(&QSpinBox::valueChanged), this, [this](int v){ progAddrB->setValue(v); visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateVisualTitles(); });
         connect(visualBitOrder,&QCheckBox::toggled,this,[this](bool){ updateVisualTitles(); });
-        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){ visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateVisualTitles(); });
+        connect(sendBusBox, qOverload<int>(&QComboBox::currentIndexChanged), this, [this](int){ visualSetupStarted=false; for(int i=0;i<16;++i) moveQueue[i]=0; updateTrackStateUiForSelectedBus(); updateVisualTitles(); });
         connect(tabs,&QTabWidget::currentChanged,this,[sendBox](int idx){ sendBox->setVisible(idx != 1); });
         connect(visualSetupRequestBtn,&QPushButton::clicked,this,[this](){
+            if(currentTrackBit == 1){
+                appendLog("WARN: Progmodus per lokaler Taste bei Gleis AN (Track=1) nicht möglich. Bitte zuerst Gleis AUS schalten.");
+                QMessageBox::warning(this, "Gleis ist AN", "Lokaler Progmodus startet nur bei Gleis AUS (Track=0).\nBitte Gleis zuerst ausschalten.");
+                return;
+            }
             visualSetupArmed=true;
             visualSetupStarted=false;
             for(int i=0;i<16;++i) moveQueue[i]=0;
             wizardLockedServo = -1;
-            int bus=(sendBusBox->currentText()=="SX1")?1:0;
+            int bus=effectiveWizardBus();
+            if(sendBusBox && sendBusBox->currentText().endsWith("1") && bus==0) appendLog(QString("INFO: %1 gewählt, Wizard nutzt %2 (Fallback)").arg(sendBusBox->currentText(), busLabel(bus)));
             wizardPulseK10(bus,1,"V2 SETUP START (K10=1 Impuls)");
             if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: angefordert (K10=1 gesendet), warte auf ACK_SETUP_*");
             appendLog("V2: Setup angefordert. Lokal Taste ist optional, primär startet K10=1 den Wizard.");
             updateVisualTitles();
         });
-        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); updateVisualTitles(); });
-        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); updateVisualTitles(); });
+        connect(visualSetupSaveBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,3,"V2 SETUP ENDE (K10=3 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Save)"); updateVisualTitles(); });
+        connect(visualSetupAbortBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,2,"V2 SETUP ABBRUCH (K10=2 Impuls)"); visualSetupStarted=false; visualSetupArmed=false; for(int i=0;i<16;++i) moveQueue[i]=0; if(visualProgStateLbl) visualProgStateLbl->setText("Progstatus: beendet (Abort)"); updateVisualTitles(); });
         updateVisualTitles();
 
         connect(progOnBtn,&QPushButton::clicked,this,[this](){
-            int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
-            sendSX(bus, 1, progAddrA->value());
-            sendSX(bus, 2, progAddrB->value());
-            sendSX(bus, 0, 0); // TrackBit 0 (über Adr0)
-            appendLog(QString("PROG EIN (%1): AddrA/AddrB gesetzt, Track=0").arg(bus?"SX1":"SX0"));
+            // Gleis/Track wird auf Bus0 geführt (SX0 bzw. RMX0), unabhängig vom Wizard-Bus
+            const int trackBus = 0;
+            sendSX(trackBus, 1, progAddrA->value());
+            sendSX(trackBus, 2, progAddrB->value());
+            sendSX(trackBus, 0, 0); // TrackBit 0 (über Adr0)
+            appendLog(QString("PROG EIN (%1): AddrA/AddrB gesetzt, Track=0").arg(busLabel(trackBus)));
         });
         connect(progOffBtn,&QPushButton::clicked,this,[this](){
-            int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
-            sendSX(bus, 0, 1); // TrackBit 1
-            appendLog(QString("PROG AUS (%1): Track=1").arg(bus?"SX1":"SX0"));
+            // Gleis/Track wird auf Bus0 geführt (SX0 bzw. RMX0), unabhängig vom Wizard-Bus
+            const int trackBus = 0;
+            sendSX(trackBus, 0, 1); // TrackBit 1
+            appendLog(QString("PROG AUS (%1): Track=1").arg(busLabel(trackBus)));
         });
-        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,1,"SETUP START (K10=1 Impuls)"); });
-        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,3,"SETUP SAVE+ENDE (K10=3 Impuls)"); });
-        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardPulseK10(bus,2,"SETUP ABBRUCH (K10=2 Impuls)"); });
-        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 1, "SETUP MOVE - (Impuls)"); });
-        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 2, "SETUP MOVE + (Impuls)"); });
-        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 3, "SETUP MITTE (Impuls)"); });
-        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 1, "SETUP L speichern (Impuls)"); });
-        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 2, "SETUP R speichern (Impuls)"); });
-        connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=(sendBusBox->currentText()=="SX1")?1:0; sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
+        connect(progStartBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,1,"SETUP START (K10=1 Impuls)"); });
+        connect(progSaveBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,3,"SETUP SAVE+ENDE (K10=3 Impuls)"); });
+        connect(progAbortBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardPulseK10(bus,2,"SETUP ABBRUCH (K10=2 Impuls)"); });
+        connect(progMoveMinusBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 1, "SETUP MOVE - (Impuls)"); });
+        connect(progMovePlusBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 2, "SETUP MOVE + (Impuls)"); });
+        connect(progMidBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardMove(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, progStep->currentText().toInt(), 3, "SETUP MITTE (Impuls)"); });
+        connect(progStoreLBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 1, "SETUP L speichern (Impuls)"); });
+        connect(progStoreRBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); wizardStore(bus, progAddrA->value(), progAddrB->value(), progServoIdx->value()-1, 2, "SETUP R speichern (Impuls)"); });
+        connect(progCommitAllBtn,&QPushButton::clicked,this,[this](){ int bus=effectiveWizardBus(); sendSX(bus,11,progServoIdx->value()-1); appendLog("SETUP Servo uebernommen"); });
     }
     ~MainWin(){ doDisconnect(); }
 
 private:
+    bool backendIsRmx() const {
+        return backendBox && backendBox->currentText()=="RMX";
+    }
+
+    QString busLabel(int bus) const {
+        const bool rmx = backendIsRmx();
+        return QString("%1%2").arg(rmx ? "RMX" : "SX").arg(bus==1?1:0);
+    }
+
+    QString busBothLabel() const {
+        return backendIsRmx() ? "RMX0+RMX1" : "SX0+SX1";
+    }
+
+    int selectedCommandBus() const {
+        if(!sendBusBox) return 0;
+        const QString sel = sendBusBox->currentText();
+        if(sel.endsWith("1")) return 1;
+        return 0;
+    }
+
+    int effectiveWizardBus() const {
+        return selectedCommandBus();
+    }
+
+    int trackRelevantBus() const {
+        if(!sendBusBox) return 0;
+        const QString sel = sendBusBox->currentText();
+        if(sel=="SX1" || sel=="RMX1") return 1;
+        return 0;
+    }
     void wizardPrime(int bus, int addrA, int addrB, int servo, int step){
         sendSX(bus,9,sxWizardSessionId);
         usleep(8000);
@@ -663,7 +745,7 @@ private:
         }
         wizardPrime(bus, addrA, addrB, servo, step); sendSX(bus,13,move); usleep(120000); sendSX(bus,13,0); usleep(25000);
         appendLog(msg);
-        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6").arg(bus?"SX1":"SX0").arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
+        appendLog(QString("DBG MOVE bus=%1 K1(addrA)=%2 K2(addrB)=%3 K15=1 K11(servo)=%4 K12(step)=%5 K13(move)=%6").arg(busLabel(bus)).arg(addrA).arg(addrB).arg(servo).arg(step).arg(move));
     }
     void wizardStore(int bus, int addrA, int addrB, int servo, int store, const QString &msg){
         if(useSerialWizard()){
@@ -680,9 +762,9 @@ private:
         }
         if(wizardLockedServo<0) wizardLockedServo = servo;
         if(servo != wizardLockedServo){ appendLog(QString("WARN: MOVE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
-        int bus=(sendBusBox->currentText()=="SX1")?1:0;
+        int bus=effectiveWizardBus();
         wizardMove(bus, visualAddrA->value(), visualAddrB->value(), servo, progStep->currentText().toInt(), move,
-                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(bus==1?"SX1":"SX0"));
+                   QString("V2 MOVE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(move).arg(busLabel(bus)));
         setAckPending(servo, "move", 1);
         if(teleFd>=0 && !cfgImportInProgress && !useSerialWizard()){
             moveAutoCfgCounter++;
@@ -700,9 +782,9 @@ private:
         }
         if(wizardLockedServo<0) wizardLockedServo = servo;
         if(servo != wizardLockedServo){ appendLog(QString("WARN: STORE auf S%1 ignoriert (Wizard-Lock auf S%2)").arg(servo+1).arg(wizardLockedServo+1)); return; }
-        int bus=(sendBusBox->currentText()=="SX1")?1:0;
+        int bus=effectiveWizardBus();
         wizardStore(bus, visualAddrA->value(), visualAddrB->value(), servo, store,
-                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(bus==1?"SX1":"SX0"));
+                    QString("V2 STORE s=%1 cmd=%2 bus=%3").arg(servo+1).arg(store).arg(busLabel(bus)));
         setAckPending(servo, "store");
         if(teleFd>=0){
             usleep(120000);
@@ -715,54 +797,88 @@ private slots:
     void doConnect(){
         doDisconnect();
         const QString sxPortActual = extractActualPort(portEdit->text());
-        fd = open(sxPortActual.toUtf8().constData(), O_RDWR|O_NOCTTY|O_SYNC);
-        if(fd<0){
+        int baud = baudBox->currentText().toInt();
+
+        if(sxPortActual.startsWith("daemon://")) {
+            appendLog(QString("Daemon-Modus aktiv: %1").arg(sxPortActual));
+        }
+        runtime.onStatus = [this](const std::string& s){ appendLog(QString("RUNTIME: %1").arg(QString::fromStdString(s))); };
+        runtime.onFrame = [this](int bus, int adr, int d){
+            if(adr<0 || adr>=112) return;
+            if(adr==15){ QString st="idle"; if(d==1) st="ok"; else if(d==2) st="error"; else if(d==3) st="busy"; progStatusLbl->setText(QString("Status K15 (SX%1): %2 (%3)").arg(bus).arg(st).arg(d)); }
+            if(adr==109){ /* ADR109-Log deaktiviert (veraltete Track-Quelle) */ }
+            if(bus==0 && adr==127){ appendLog(QString("SX0 ADR127: raw=%1 bits=%2").arg(d).arg(bits8(d, true))); }
+            if(adr==0){ /* K0-Frame-Log gedrosselt: zu viel Spam im Normalbetrieb */ }
+            if(bus==0){ if(sx0[adr]==d) return; int old=sx0[adr]; sx0[adr]=d; if(busBox->currentText()=="SX0" || busBox->currentText()=="SX0+SX1") updateRow(adr,0,d); logChange(adr,0,old,d);} else { if(sx1[adr]==d) return; int old=sx1[adr]; sx1[adr]=d; if(busBox->currentText()=="SX1" || busBox->currentText()=="SX0+SX1") updateRow(adr,1,d); logChange(adr,1,old,d);} 
+        };
+        runtime.onTrack = [this](int tr){ updateTrackStateFromBus(0, tr); };
+        if(!runtime.connectPort(sxPortActual.toStdString(), baud)) {
             statusLbl->setText("open failed");
             QString shown = displayPortWithHint(sxPortActual);
             QString entered = portEdit ? portEdit->text().trimmed() : sxPortActual;
-            appendLog(QString("Connect fehlgeschlagen: Port konnte nicht geöffnet werden (eingabe=%1 | intern=%2)").arg(entered, shown));
-            QMessageBox::warning(this, "SX Connect", QString("Port konnte nicht geöffnet werden:\nEingabe: %1\nIntern:  %2").arg(entered, shown));
-            return;
-        }
-        int baud = baudBox->currentText().toInt();
-        if(!set_serial(fd, baud)){ statusLbl->setText("serial cfg failed"); ::close(fd); fd=-1; return; }
-
-        bool okA0 = wr2(fd, 0xFE, 0xA0); usleep(20000);   // Monitor+Feedback
-        bool okB0 = wr2(fd, 0xFE, 0xB0); usleep(10000);   // Start mit Bus 0 selektiert
-        if(!okA0 || !okB0){ statusLbl->setText("connect test failed"); ::close(fd); fd=-1; return; }
-
-        int rxCount = 0;
-        for(int i=0; i<40; ++i){
-            uint8_t b=0;
-            int r = ::read(fd, &b, 1);
-            if(r==1) rxCount++;
-            else usleep(10000);
-        }
-        if(rxCount < 4){
-            statusLbl->setText("connect failed: kein SX-Bus erkannt");
-            QString shown = displayPortWithHint(sxPortActual);
-            appendLog(QString("Connect abgebrochen: kein SX-Bus-Datenverkehr erkannt auf %1 (rx=%2)").arg(shown).arg(rxCount));
-            QMessageBox::warning(this, "SX Connect", QString("Kein SX-Bus erkannt.\nPort: %1\nEmpfangene Bytes im Handshake: %2").arg(shown).arg(rxCount));
-            ::close(fd); fd=-1;
-            connectBtn->setEnabled(true); disconnectBtn->setEnabled(false);
-            connectBtn->setStyleSheet("");
+            appendLog(QString("Connect fehlgeschlagen: Runtime/Open fehlgeschlagen (eingabe=%1 | intern=%2)").arg(entered, shown));
+            QMessageBox::warning(this, "SX Connect", QString("Port/Runtime konnte nicht geöffnet werden:\nEingabe: %1\nIntern:  %2").arg(entered, shown));
             return;
         }
 
+        const bool isRmxBackend = backendBox && backendBox->currentText()=="RMX";
         rtbsBus1 = false;
         visualSetupStarted = false;
         pending=-1;
-        sendBusBox->setCurrentText("SX1");
-        rxWarmupUntilMs = uptime.elapsed() + 1200; // Initialrauschen nach Connect unterdruecken
+        // Für den ersten Schritt bleiben die Buslabels gleich; wir zeigen weiterhin beide Spalten.
+        busBox->setCurrentText("SX0+SX1");
+        rxWarmupUntilMs = uptime.elapsed() + 1200;
+        logWarmupUntilMs = uptime.elapsed() + 2200;
+
+        bridge.onFrame = [this](int bus, int adr, int d){
+            if(adr<0 || adr>=112) return;
+
+            if(adr==15){
+                QString st="idle";
+                if(d==1) st="ok"; else if(d==2) st="error"; else if(d==3) st="busy";
+                progStatusLbl->setText(QString("Status K15 (SX%1): %2 (%3)").arg(bus).arg(st).arg(d));
+            }
+            if(adr==109){
+                /* ADR109-Log deaktiviert (veraltete Track-Quelle) */
+            }
+            if(bus==0 && adr==127){
+                appendLog(QString("SX0 ADR127: raw=%1 bits=%2").arg(d).arg(bits8(d, true)));
+            }
+            if(adr==0){
+                /* K0-Frame-Log gedrosselt: zu viel Spam im Normalbetrieb */
+            }
+
+            if(bus==0){
+                if(sx0[adr]==d) return;
+                int old=sx0[adr]; sx0[adr]=d;
+                if(busBox->currentText()=="SX0" || busBox->currentText()=="SX0+SX1") updateRow(adr,0,d);
+                logChange(adr,0,old,d);
+            } else {
+                if(sx1[adr]==d) return;
+                int old=sx1[adr]; sx1[adr]=d;
+                if(busBox->currentText()=="SX1" || busBox->currentText()=="SX0+SX1") updateRow(adr,1,d);
+                logChange(adr,1,old,d);
+            }
+        };
+
+        bridge.onTrack = [this](int tr){
+            updateTrackStateFromBus(0, tr);
+        };
+
         timer->start(25);
+        // GET_TRACK im Daemon wird beim Connect bereits gesendet; hier sofort einmal pollen,
+        // damit RMX-Trackstatus (AN/AUS) direkt in der UI erscheint.
+        for(int i=0;i<8;++i){ runtime.poll(); usleep(3000); }
         statusLbl->setText("online");
         connectBtn->setEnabled(false); disconnectBtn->setEnabled(true);
         connectBtn->setStyleSheet("QPushButton { background:#1f7a1f; color:white; font-weight:600; }");
-        appendLog("Connect ok, SX-Interface erkannt (FE A0/B0 + Datenverkehr). Bus für V2 auf SX1 gesetzt.");
+        appendLog(QString("Connect ok, Backend=%1, Daemon=%2").arg(isRmxBackend?"RMX":"SX", sxPortActual));
     }
 
     void doDisconnect(){
         timer->stop();
+        runtime.disconnectPort();
+        bridge.close();
         if(fd>=0){ ::close(fd); fd=-1; }
         connectBtn->setEnabled(true); disconnectBtn->setEnabled(false);
         connectBtn->setStyleSheet("");
@@ -789,30 +905,20 @@ private slots:
         teleLineBuf.clear();
     }
 
+    bool isReservedAdr(int adr) const {
+        if(adr >= 0 && adr <= 3) return true;
+        if(adr >= 104 && adr <= 111) return true;
+        return false;
+    }
+
     bool sendSX(int bus, int adr, int val){
-        if(fd<0) return false;
         const int targetBus = (bus==1) ? 1 : 0;
-        bool ok = true;
-
-        // Immer genau EINEN expliziten Bus senden (kein SX0/SX1-Mitsenden)
-        ok = ok && wr2(fd, 0xFE, (targetBus==0)?0xB0:0xB1);
-        usleep(4000);
-        rtbsBus1 = (targetBus==1);
-
-        uint8_t cmd = (uint8_t)(0x80 | (adr & 0x7F));
-        uint8_t data = (uint8_t)(val & 0xFF);
-
-        // Mehrfach senden fuer robuste Uebernahme am Interface
-        for(int i=0;i<4;i++){
-            ok = ok && wr2(fd, cmd, data);
-            usleep(3000);
-        }
-
+        bool ok = runtime.send(targetBus, adr, val);
         appendLog(QString("TX SX%1 ADR %2 cmd=%3 DATA=%4")
                   .arg(targetBus)
                   .arg(adr & 0x7F)
-                  .arg(QString("0x%1").arg(cmd,2,16,QChar('0')).toUpper())
-                  .arg((int)data));
+                  .arg(QString("0x%1").arg((uint8_t)(0x80 | (adr & 0x7F)),2,16,QChar('0')).toUpper())
+                  .arg(val & 0xFF));
         return ok;
     }
 
@@ -821,14 +927,17 @@ private slots:
             appendLog("WARN: SX Senden blockiert: Serial-Wizard aktiv (erst Setup Ende/Abort)");
             return;
         }
-        if(fd<0){ appendLog("Senden fehlgeschlagen: offline"); return; }
         if(confirmBox->isChecked()){
             auto r = QMessageBox::question(this, "Senden", "Wert wirklich auf SX-Bus senden?");
             if(r != QMessageBox::Yes) return;
         }
         int adr = sendAdr->value() & 0x7F;
+        if(isReservedAdr(adr)){
+            appendLog(QString("WARN: Senden auf reservierte/systemnahe Adresse ADR %1 ist deaktiviert.").arg(adr));
+            return;
+        }
         int val = sendVal->value() & 0xFF;
-        int bus = (sendBusBox->currentText()=="SX1") ? 1 : 0;
+        int bus = selectedCommandBus();
 
         bool ok = sendSX(bus, adr, val);
         uint8_t cmd = (uint8_t)(0x80 | adr);
@@ -841,11 +950,89 @@ private slots:
                   .arg(bits8(val, bitOrderBox->isChecked())));
     }
 
+    bool selRautenhausBus(int bus){
+        if(fd<0) return false;
+        return wr2(fd, 0xFE, bus==1 ? 0x02 : 0x00);
+    }
+
+    bool commandReadSXbus(int bus, int adr){
+        if(fd<0) return false;
+        if(!selRautenhausBus(bus)) return false;
+        if(!wr1(fd, (uint8_t)(adr & 0x7F))) return false; // SXread + adr
+        if(!wr1(fd, 0x5A)) return false;                   // SXempty
+        return true;
+    }
+
+    int readSXbusByte(int timeoutMs=30){
+        if(fd<0) return -1;
+        uint8_t b=0;
+        const qint64 end = uptime.elapsed() + timeoutMs;
+        while(uptime.elapsed() < end){
+            int r = ::read(fd, &b, 1);
+            if(r==1) return (int)b;
+            usleep(1000);
+        }
+        return -1;
+    }
+
+    bool readSXbusPair(int expectBus, int expectAdr, int &outData, int timeoutMs=60){
+        // Rautenhaus-Read-Antwort gemäß Doku: zuerst Adressbyte, dann Datenbyte.
+        // Wir akzeptieren nur das erwartete Paar (Bus+Adr) und verwerfen den Rest.
+        if(fd<0) return false;
+        const qint64 end = uptime.elapsed() + timeoutMs;
+        while(uptime.elapsed() < end){
+            int a = readSXbusByte(4);
+            if(a < 0) continue;
+            int d = readSXbusByte(4);
+            if(d < 0) continue;
+
+            int bus = ((a & 0x80) ? 1 : 0);
+            int adr = (a & 0x7F);
+            if(bus==expectBus && adr==expectAdr){
+                outData = d & 0xFF;
+                return true;
+            }
+
+            appendLog(QString("TRACK POLL DROP pair adrRaw=%1 adr=%2 bus=%3 data=%4")
+                      .arg(a).arg(adr).arg(bus).arg(d & 0xFF));
+        }
+        return false;
+    }
+
+    void pollTrackViaSelectrix(){
+        if(fd<0) return;
+        static qint64 nextPoll=0;
+        const qint64 now = uptime.elapsed();
+        if(now < nextPoll) return;
+        nextPoll = now + 2000; // kontrolliert, kein Dauerpoll
+
+        // Kontrolliertes ADR109-Statusread (SLX852/825 Rautenhaus):
+        // Read-Sequenz senden und nur ein valides Antwortpaar (Adr+Data) akzeptieren.
+        // Kein Feedback-Toggle -> minimiert Seiteneffekte im laufenden Betrieb.
+        int d = -1;
+        bool ok = false;
+        if(commandReadSXbus(0, 109)){
+            ok = readSXbusPair(0, 109, d, 50);
+        }
+        if(!ok){
+            appendLog("WARN: TRACK READ ADR109 kein valides Antwortpaar");
+            return;
+        }
+
+        const int track = (d >> 7) & 0x01;
+        appendLog(QString("TRACK READ SX0 ADR109 raw=%1 bit7=%2").arg(d).arg(track));
+        updateTrackStateFromBus(0, track);
+    }
+
     void openSwitchPanel(int row,int col){
         if(!(col==0 || col==1 || col==2 || col==3 || col==4 || col==5 || col==6 || col==7 || col==8 || col==9 || col==10 || col==11)) return;
         int block = col/3;
         int adr = block*28 + row;
         if(adr<0 || adr>111) return;
+        if(isReservedAdr(adr)){
+            appendLog(QString("INFO: ADR %1 ist reserviert/systemnah (Anzeige ja, Editieren aus)." ).arg(adr));
+            return;
+        }
         int valCol = block*3+1;
         bool ok=false;
         int current = table->item(row,valCol)->text().toInt(&ok);
@@ -886,46 +1073,9 @@ private slots:
     void pollSerial(){
         pollTelemetry();
         checkAckTimeouts();
-        if(fd<0) return;
-        if(rxPauseBox && rxPauseBox->isChecked()) return;
-        uint8_t buf[512];
-        int n = ::read(fd, buf, sizeof(buf));
-        if(n<=0) return;
-
-        for(int i=0;i<n;i++){
-            uint8_t b=buf[i];
-            if(pending<0){
-                // Nur gueltige SX-Adressbytes als Frame-Start akzeptieren
-                // (ASCII/Binaermuell soll nicht als SX-Frame fehlinterpretiert werden)
-                if((b & 0x80)==0) continue;
-                pending=b;
-                continue;
-            }
-            uint8_t adr_raw = (uint8_t)pending;
-            pending=-1;
-            int adr = adr_raw & 0x7F;
-            int bus = (adr_raw & 0x80) ? 1 : 0;
-            int d = (int)b;
-            if(adr<0 || adr>=112) continue;
-            if(uptime.elapsed() < rxWarmupUntilMs) continue; // Connect-Start-Rauschen ignorieren
-
-            if(adr==15){
-                QString st="idle";
-                if(d==1) st="ok"; else if(d==2) st="error"; else if(d==3) st="busy";
-                progStatusLbl->setText(QString("Status K15 (SX%1): %2 (%3)").arg(bus).arg(st).arg(d));
-            }
-
-            if(bus==0){
-                if(sx0[adr]==d) continue;
-                int old=sx0[adr]; sx0[adr]=d;
-                if(busBox->currentText()=="SX0" || busBox->currentText()=="SX0+SX1") updateRow(adr,0,d);
-                logChange(adr,0,old,d);
-            } else {
-                if(sx1[adr]==d) continue;
-                int old=sx1[adr]; sx1[adr]=d;
-                if(busBox->currentText()=="SX1" || busBox->currentText()=="SX0+SX1") updateRow(adr,1,d);
-                logChange(adr,1,old,d);
-            }
+        int n = runtime.poll();
+        if(n<0){
+            appendLog("RUNTIME POLL ERROR");
         }
     }
 
@@ -958,9 +1108,47 @@ private slots:
         }
     }
 
+    void updateTrackStateUiForSelectedBus(){
+        int selectedBus = trackRelevantBus();
+        int shown = sxTrack[selectedBus];
+        if(shown < 0){
+            currentTrackBit = -1;
+            if(trackStateLbl){
+                trackStateLbl->setText("UNBEKANNT");
+                trackStateLbl->setStyleSheet("QLabel { background:#666; color:white; border:1px solid #333; border-radius:3px; font-weight:700; }");
+            }
+            if(trackTextLbl) trackTextLbl->setText(QString("Gleis: unbekannt (SX%1)").arg(selectedBus));
+            return;
+        }
+
+        currentTrackBit = shown;
+        if(trackStateLbl){
+            if(shown==0){
+                trackStateLbl->setText("AUS");
+                trackStateLbl->setStyleSheet("QLabel { background:#b22222; color:white; border:1px solid #333; border-radius:3px; font-weight:700; }");
+                if(trackTextLbl) trackTextLbl->setText(QString("Gleis: AUS (Track=0, SX%1)").arg(selectedBus));
+            } else {
+                trackStateLbl->setText("AN");
+                trackStateLbl->setStyleSheet("QLabel { background:#1f7a1f; color:white; border:1px solid #333; border-radius:3px; font-weight:700; }");
+                if(trackTextLbl) trackTextLbl->setText(QString("Gleis: AN (Track=1, SX%1)").arg(selectedBus));
+            }
+        }
+    }
+
+    void updateTrackStateFromBus(int bus, int trackBit){
+        const int bi = bus ? 1 : 0;
+        const int old = sxTrack[bi];
+        const int neu = (trackBit ? 1 : 0);
+        sxTrack[bi] = neu;
+        if(old != neu){
+            appendLog(QString("TRACK UPDATE: SX%1 %2 -> %3").arg(bi).arg(old).arg(neu));
+        }
+        updateTrackStateUiForSelectedBus();
+    }
+
     void parseTelemetryLine(const QString &line){
         if(line=="RX:" || line.startsWith("RX:\uFFFD") || line.startsWith("RX:?")) return;
-        bool knownPrefix = line.startsWith("HELLO ") || line.startsWith("ACK_") || line.startsWith("CFG_") || line.startsWith("RX:") || line.startsWith("FW-Version:") || line.startsWith("SX30 ServoDecoder start") || line.startsWith("Setup starten:") || line.startsWith("CFG:");
+        bool knownPrefix = line.startsWith("HELLO ") || line.startsWith("ACK_") || line.startsWith("CFG_") || line.startsWith("PROG_STATUS ") || line.startsWith("RX:") || line.startsWith("FW-Version:") || line.startsWith("SX30 ServoDecoder start") || line.startsWith("Setup starten:") || line.startsWith("CFG:");
         if(!knownPrefix){
             appendLog(QString("TEL(noise): %1").arg(line));
             return;
@@ -976,6 +1164,44 @@ private slots:
                 int proto = m.captured(3).toInt();
                 bool ok = (decoder=="servodecoder" && proto>=1);
                 fwStatusLbl->setText(QString("FW: %1 (%2 p%3)").arg(ok?"OK":"UPDATE NÖTIG").arg(fw).arg(proto));
+            }
+            return;
+        }
+
+        if(line.startsWith("PROG_STATUS ")){
+            QRegularExpression re("active=(\\d+)\\s+source=([^\\s]+)\\s+track=(\\d+)\\s+led=(\\d+)");
+            auto m = re.match(line);
+            if(m.hasMatch()){
+                const bool active = (m.captured(1).toInt() != 0);
+                const QString source = m.captured(2);
+                const int track = m.captured(3).toInt();
+                const int led = m.captured(4).toInt();
+                updateTrackStateFromBus(trackRelevantBus(), track);
+                visualSetupArmed = false;
+                visualSetupStarted = active;
+                if(!active){
+                    localButtonAutoSetupSent = false;
+                    wizardLockedServo = -1;
+                    for(int i=0;i<16;++i) moveQueue[i]=0;
+                }
+                if(visualProgStateLbl){
+                    visualProgStateLbl->setText(QString("Progstatus: %1 (Quelle=%2, Track=%3, D13=%4)")
+                                                 .arg(active ? "AKTIV" : "INAKTIV")
+                                                 .arg(source)
+                                                 .arg(track)
+                                                 .arg(led ? "AN" : "AUS"));
+                }
+                appendLog(QString("V2 Progstatus vom Decoder: %1, Quelle=%2, Track=%3, D13=%4")
+                          .arg(active ? "AKTIV" : "INAKTIV")
+                          .arg(source)
+                          .arg(track)
+                          .arg(led ? "AN" : "AUS"));
+                if(active && source == "local_button" && useSerialWizard() && !localButtonAutoSetupSent){
+                    localButtonAutoSetupSent = true;
+                    sendSerialWizardChar('s', "auto-start-nach-lokaler-progtaste");
+                    appendLog("V2: Lokale Prog-Taste erkannt; Serial-Wizard automatisch mit 's' in Servo-Setup versetzt.");
+                }
+                updateVisualTitles();
             }
             return;
         }
@@ -1108,12 +1334,48 @@ private:
     }
 
     void logChange(int adr,int bus,int oldv,int newv){
+        if(uptime.elapsed() < logWarmupUntilMs) return; // Initialdump nach Connect unterdrücken
+        if(adr==0 || adr==64) return; // ADR0/64 rauschen stark, Log unlesbar
         QString ts = QDateTime::currentDateTime().toString("hh:mm:ss.zzz");
         appendLog(QString("%1  SX%2 ADR %3  %4 -> %5  bits=%6")
                   .arg(ts).arg(bus).arg(adr).arg(oldv).arg(newv).arg(bits8(newv, bitOrderBox->isChecked())));
     }
 
-    void appendLog(const QString& s){ logView->append(s); }
+    void initLogFiles(){
+        const QString dirPath = QDir::homePath() + "/SXServo-Logs";
+        QDir dir;
+        if(!dir.mkpath(dirPath)){
+            if(logView) logView->append(QString("WARN: Log-Verzeichnis konnte nicht erstellt werden: %1").arg(dirPath));
+            return;
+        }
+
+        const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd_HHmmss");
+        sessionLogPath = dirPath + QString("/sxservo_qt_v2_%1.log").arg(stamp);
+        latestLogPath = dirPath + "/sxservo_qt_v2_latest.log";
+
+        sessionLogFile.setFileName(sessionLogPath);
+        latestLogFile.setFileName(latestLogPath);
+        const bool sessionOk = sessionLogFile.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Append);
+        const bool latestOk = latestLogFile.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate);
+        if(!sessionOk && logView) logView->append(QString("WARN: Session-Log kann nicht geöffnet werden: %1").arg(sessionLogPath));
+        if(!latestOk && logView) logView->append(QString("WARN: Latest-Log kann nicht geöffnet werden: %1").arg(latestLogPath));
+    }
+    void appendLog(const QString& s){
+        if(logView) logView->append(s);
+        const QString line = QString("%1  %2\n").arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs), s);
+        if(sessionLogFile.isOpen()){
+            QTextStream ts(&sessionLogFile);
+            ts << line;
+            ts.flush();
+            sessionLogFile.flush();
+        }
+        if(latestLogFile.isOpen()){
+            QTextStream ts(&latestLogFile);
+            ts << line;
+            ts.flush();
+            latestLogFile.flush();
+        }
+    }
     void updateServoArmLabel(int s){
         if(s<0 || s>=16 || !servoArmWidgets[s]) return;
         if(servoArmPos[s] < -90) servoArmPos[s] = -90;
@@ -1191,7 +1453,8 @@ private:
             if(moveQueue[s] != 0) qTag = QString(" | Q:%1").arg(moveQueue[s]);
             visualServoBoxes[s]->setTitle(QString("S%1 | Adr %2 | Bit %3%4%5").arg(s+1).arg(adr).arg(shown).arg(ackTag).arg(qTag));
         }
-        if(sendBtn) sendBtn->setEnabled(!serialWizardActive);
+        const bool reservedBlocked = sendAdr ? isReservedAdr(sendAdr->value() & 0x7F) : false;
+        if(sendBtn) sendBtn->setEnabled(!serialWizardActive && !reservedBlocked);
         if(quick0Btn) quick0Btn->setEnabled(!serialWizardActive);
         if(quick1Btn) quick1Btn->setEnabled(!serialWizardActive);
         if(quick255Btn) quick255Btn->setEnabled(!serialWizardActive);
@@ -1200,7 +1463,7 @@ private:
         if(visualSetupAbortBtn) visualSetupAbortBtn->setEnabled(visualSetupStarted);
     }
 
-    QComboBox *ifaceBox{}, *busBox{};
+    QComboBox *ifaceBox{}, *backendBox{}, *busBox{};
     QCheckBox *bitOrderBox{};
     QLineEdit *portEdit{};
     QComboBox *baudBox{};
@@ -1224,13 +1487,17 @@ private:
     QCheckBox *visualBitOrder{};
     QComboBox *progPathBox{};
     QPushButton *visualSetupRequestBtn{}, *visualSetupSaveBtn{}, *visualSetupAbortBtn{};
-    QLabel *visualProgStateLbl{};
+    QLabel *visualProgStateLbl{}, *trackIconLbl{}, *trackStateLbl{}, *trackTextLbl{};
     int servoArmPos[16]{};
     bool armLiveValid[16]{};
     QTableWidget *servoTable{};
     QTableWidget *table{};
     QTextEdit *logView{};
     QTimer *timer{};
+    QFile sessionLogFile;
+    QFile latestLogFile;
+    QString sessionLogPath;
+    QString latestLogPath;
 
     int fd=-1, pending=-1;
     int teleFd=-1;
@@ -1241,11 +1508,13 @@ private:
     QElapsedTimer uptime;
     QString appVersion = APP_VERSION;
     qint64 rxWarmupUntilMs = 0;
+    qint64 logWarmupUntilMs = 0;
     int cfgSeenCount = 0;
     bool cfgImportInProgress = false;
     int moveAutoCfgCounter = 0;
     bool visualSetupArmed=false;
     bool visualSetupStarted=false;
+    bool localButtonAutoSetupSent=false;
     QString ackPendingType[16];
     qint64 ackPendingSinceMs[16]{};
     qint64 ackTimeoutForServoMs[16]{};
@@ -1256,6 +1525,10 @@ private:
     const qint64 ackTimeoutBaseMs = 1800;
     const qint64 ackTimeoutPerExtraStepMs = 180;
     int sx0[112], sx1[112];
+    int sxTrack[2] = {-1, -1};
+    int currentTrackBit = -1;
+    SxBusBridge bridge;
+    SxRuntime runtime;
 };
 
 #include "sx_monitor_qt_v2.moc"

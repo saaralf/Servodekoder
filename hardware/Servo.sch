@@ -57,6 +57,8 @@
 <layer number="57" name="tCAD" color="7" fill="1" visible="no" active="no"/>
 <layer number="59" name="tCarbon" color="7" fill="1" visible="no" active="no"/>
 <layer number="60" name="bCarbon" color="7" fill="1" visible="no" active="no"/>
+<layer number="88" name="SimResults" color="9" fill="1" visible="yes" active="yes"/>
+<layer number="89" name="SimProbes" color="9" fill="1" visible="yes" active="yes"/>
 <layer number="90" name="Modules" color="5" fill="1" visible="yes" active="yes"/>
 <layer number="91" name="Nets" color="2" fill="1" visible="yes" active="yes"/>
 <layer number="92" name="Busses" color="1" fill="1" visible="yes" active="yes"/>
@@ -749,45 +751,6 @@ W = angled&lt;p&gt;
 <rectangle x1="0.3556" y1="-0.7239" x2="1.1057" y2="0.7262" layer="51"/>
 <wire x1="0" y1="0.508" x2="0" y2="-0.508" width="0.3048" layer="21"/>
 </package>
-<package name="SOT23-R">
-<description>&lt;b&gt;SOT23&lt;/b&gt; - Reflow soldering</description>
-<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6604" width="0.1524" layer="51"/>
-<wire x1="1.5724" y1="-0.6604" x2="-1.5724" y2="-0.6604" width="0.1524" layer="51"/>
-<wire x1="-1.5724" y1="-0.6604" x2="-1.5724" y2="0.6604" width="0.1524" layer="51"/>
-<wire x1="-1.5724" y1="0.6604" x2="1.5724" y2="0.6604" width="0.2032" layer="51"/>
-<wire x1="-1.5724" y1="-0.6524" x2="-1.5724" y2="0.6604" width="0.2032" layer="21"/>
-<wire x1="-1.5724" y1="0.6604" x2="-0.5636" y2="0.6604" width="0.2032" layer="21"/>
-<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6524" width="0.2032" layer="21"/>
-<wire x1="0.5636" y1="0.6604" x2="1.5724" y2="0.6604" width="0.2032" layer="21"/>
-<wire x1="0.3724" y1="-0.6604" x2="-0.3864" y2="-0.6604" width="0.2032" layer="21"/>
-<smd name="3" x="0" y="1" dx="0.635" dy="1.016" layer="1"/>
-<smd name="2" x="0.95" y="-1" dx="0.635" dy="1.016" layer="1"/>
-<smd name="1" x="-0.95" y="-1" dx="0.635" dy="1.016" layer="1"/>
-<text x="1.778" y="-0.127" size="0.8128" layer="25" ratio="18">&gt;NAME</text>
-<text x="1.778" y="-0.635" size="0.4064" layer="27" ratio="10">&gt;VALUE</text>
-<rectangle x1="-0.2286" y1="0.7112" x2="0.2286" y2="1.2954" layer="51"/>
-<rectangle x1="0.7112" y1="-1.2954" x2="1.1684" y2="-0.7112" layer="51"/>
-<rectangle x1="-1.1684" y1="-1.2954" x2="-0.7112" y2="-0.7112" layer="51"/>
-</package>
-<package name="SOT23-WIDE">
-<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6604" width="0.2032" layer="51"/>
-<wire x1="1.5724" y1="-0.6604" x2="-1.5724" y2="-0.6604" width="0.1524" layer="51"/>
-<wire x1="-1.5724" y1="-0.6604" x2="-1.5724" y2="0.6604" width="0.2032" layer="51"/>
-<wire x1="-1.5724" y1="0.6604" x2="1.5724" y2="0.6604" width="0.2032" layer="51"/>
-<wire x1="-1.6724" y1="-0.6524" x2="-1.6724" y2="0.6604" width="0.2032" layer="21"/>
-<wire x1="-1.6724" y1="0.6604" x2="-0.7136" y2="0.6604" width="0.2032" layer="21"/>
-<wire x1="1.6724" y1="0.6604" x2="1.6724" y2="-0.6524" width="0.2032" layer="21"/>
-<wire x1="0.7136" y1="0.6604" x2="1.6724" y2="0.6604" width="0.2032" layer="21"/>
-<wire x1="0.2224" y1="-0.6604" x2="-0.2364" y2="-0.6604" width="0.2032" layer="21"/>
-<smd name="3" x="0" y="1" dx="1" dy="1.2" layer="1"/>
-<smd name="2" x="0.95" y="-1" dx="1" dy="1.2" layer="1"/>
-<smd name="1" x="-0.95" y="-1" dx="1" dy="1.2" layer="1"/>
-<text x="1.905" y="0" size="0.8128" layer="25" ratio="18">&gt;NAME</text>
-<text x="1.905" y="-0.635" size="0.4064" layer="27" ratio="10">&gt;VALUE</text>
-<rectangle x1="-0.2286" y1="0.7112" x2="0.2286" y2="1.2954" layer="51"/>
-<rectangle x1="0.7112" y1="-1.2954" x2="1.1684" y2="-0.7112" layer="51"/>
-<rectangle x1="-1.1684" y1="-1.2954" x2="-0.7112" y2="-0.7112" layer="51"/>
-</package>
 <package name="TO252">
 <description>&lt;b&gt;SMALL OUTLINE TRANSISTOR&lt;/b&gt;&lt;p&gt;
 TS-003</description>
@@ -804,12 +767,12 @@ TS-003</description>
 <smd name="3" x="0" y="2.5" dx="5.4" dy="6.2" layer="1"/>
 <smd name="1" x="-2.28" y="-4.8" dx="1" dy="1.6" layer="1"/>
 <smd name="2" x="2.28" y="-4.8" dx="1" dy="1.6" layer="1"/>
-<text x="-3.81" y="-2.54" size="0.8128" layer="25" ratio="18" rot="R90">&gt;NAME</text>
-<text x="5.08" y="-2.54" size="0.4064" layer="27" ratio="10" rot="R90">&gt;VALUE</text>
+<text x="-3.81" y="-2.54" size="1.27" layer="25" rot="R90">&gt;NAME</text>
+<text x="5.08" y="-2.54" size="1.27" layer="27" rot="R90">&gt;VALUE</text>
 <rectangle x1="-2.7178" y1="-5.1562" x2="-1.8542" y2="-2.2606" layer="51"/>
 <rectangle x1="1.8542" y1="-5.1562" x2="2.7178" y2="-2.2606" layer="51"/>
 <rectangle x1="-0.4318" y1="-3.0226" x2="0.4318" y2="-2.2606" layer="21"/>
-<polygon width="0.2032" layer="51">
+<polygon width="0.1998" layer="51">
 <vertex x="-2.5654" y="3.937"/>
 <vertex x="-2.5654" y="4.6482"/>
 <vertex x="-2.1082" y="5.1054"/>
@@ -817,6 +780,45 @@ TS-003</description>
 <vertex x="2.5654" y="4.6482"/>
 <vertex x="2.5654" y="3.937"/>
 </polygon>
+</package>
+<package name="SOT23-R">
+<description>&lt;b&gt;SOT23&lt;/b&gt; - Reflow soldering</description>
+<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6604" width="0.1524" layer="51"/>
+<wire x1="1.5724" y1="-0.6604" x2="-1.5724" y2="-0.6604" width="0.1524" layer="51"/>
+<wire x1="-1.5724" y1="-0.6604" x2="-1.5724" y2="0.6604" width="0.1524" layer="51"/>
+<wire x1="-1.5724" y1="0.6604" x2="1.5724" y2="0.6604" width="0.1524" layer="51"/>
+<wire x1="-1.5724" y1="-0.6524" x2="-1.5724" y2="0.6604" width="0.1524" layer="21"/>
+<wire x1="-1.5724" y1="0.6604" x2="-0.5136" y2="0.6604" width="0.1524" layer="21"/>
+<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6524" width="0.1524" layer="21"/>
+<wire x1="0.5636" y1="0.6604" x2="1.5724" y2="0.6604" width="0.1524" layer="21"/>
+<wire x1="0.4224" y1="-0.6604" x2="-0.4364" y2="-0.6604" width="0.1524" layer="21"/>
+<smd name="3" x="0" y="1" dx="0.635" dy="1.016" layer="1"/>
+<smd name="2" x="0.95" y="-1" dx="0.635" dy="1.016" layer="1"/>
+<smd name="1" x="-0.95" y="-1" dx="0.635" dy="1.016" layer="1"/>
+<text x="1.778" y="0.254" size="0.8128" layer="25">&gt;NAME</text>
+<text x="1.778" y="-0.762" size="0.8128" layer="27">&gt;VALUE</text>
+<rectangle x1="-0.2286" y1="0.7112" x2="0.2286" y2="1.2954" layer="51"/>
+<rectangle x1="0.7112" y1="-1.2954" x2="1.1684" y2="-0.7112" layer="51"/>
+<rectangle x1="-1.1684" y1="-1.2954" x2="-0.7112" y2="-0.7112" layer="51"/>
+</package>
+<package name="SOT23-WIDE">
+<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6604" width="0.1524" layer="51"/>
+<wire x1="1.5724" y1="-0.6604" x2="-1.5724" y2="-0.6604" width="0.1524" layer="51"/>
+<wire x1="-1.5724" y1="-0.6604" x2="-1.5724" y2="0.6604" width="0.1524" layer="51"/>
+<wire x1="-1.5724" y1="0.6604" x2="1.5724" y2="0.6604" width="0.1524" layer="51"/>
+<wire x1="-1.5724" y1="-0.6524" x2="-1.5724" y2="0.6604" width="0.1524" layer="21"/>
+<wire x1="-1.5724" y1="0.6604" x2="-0.5136" y2="0.6604" width="0.1524" layer="21"/>
+<wire x1="1.5724" y1="0.6604" x2="1.5724" y2="-0.6524" width="0.1524" layer="21"/>
+<wire x1="0.5636" y1="0.6604" x2="1.5724" y2="0.6604" width="0.1524" layer="21"/>
+<wire x1="0.4224" y1="-0.6604" x2="-0.4364" y2="-0.6604" width="0.1524" layer="21"/>
+<smd name="3" x="0" y="1" dx="1" dy="1.27" layer="1"/>
+<smd name="2" x="0.95" y="-1" dx="1" dy="1.27" layer="1"/>
+<smd name="1" x="-0.95" y="-1" dx="1" dy="1.27" layer="1"/>
+<text x="1.778" y="0.254" size="0.8128" layer="25">&gt;NAME</text>
+<text x="1.778" y="-0.762" size="0.8128" layer="27">&gt;VALUE</text>
+<rectangle x1="-0.2286" y1="0.7112" x2="0.2286" y2="1.2954" layer="51"/>
+<rectangle x1="0.7112" y1="-1.2954" x2="1.1684" y2="-0.7112" layer="51"/>
+<rectangle x1="-1.1684" y1="-1.2954" x2="-0.7112" y2="-0.7112" layer="51"/>
 </package>
 </packages>
 <symbols>
@@ -1136,16 +1138,6 @@ TS-003</description>
 &lt;td&gt;--&lt;/td&gt;
 &lt;td&gt;75pF @ 25V&lt;/td&gt;
 &lt;td&gt;Digikey: IRLML5103PBFCT-ND&lt;/td&gt;
-&lt;/tr&gt;
-
-&lt;tr&gt;
-&lt;td&gt;IRLML6401&lt;/td&gt;
-&lt;td&gt;12V&lt;/td&gt;
-&lt;td&gt;4.3A&lt;/td&gt;
-&lt;td&gt;50 mOhm&lt;/td&gt;
-&lt;td&gt;950mV @ 250µA&lt;/td&gt;
-&lt;td&gt;830pF @ 10V&lt;/td&gt;
-&lt;td&gt;Digikey: IRLML6401PBFTR-ND&lt;/td&gt;
 &lt;/tr&gt;
 
 &lt;tr&gt;
@@ -11287,9 +11279,8 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <part name="FRAME1" library="frames" deviceset="DINA4_L" device=""/>
 <part name="JP1" library="con-lstb" deviceset="MA20-1" device="" value="J1"/>
 <part name="JP2" library="con-lstb" deviceset="MA20-1" device="" value="J2"/>
-<part name="U1" library="microbuilder" deviceset="PCA9685" device="" value="PCA9685"/>
+<part name="PCA9685" library="microbuilder" deviceset="PCA9685" device="" value="PCA9685"/>
 <part name="C1" library="microbuilder" deviceset="CAP_CERAMIC" device="0805-NOOUTLINE" value="10uF"/>
-<part name="Q1" library="microbuilder" deviceset="MOSFET-P" device="TO252" value="AOD417"/>
 <part name="C2" library="adafruit" deviceset="CPOL-US" device="E3.5-8" value="1000µF"/>
 <part name="SUPPLY1" library="supply2" library_urn="urn:adsk.eagle:library:372" deviceset="VDD" device=""/>
 <part name="SUPPLY2" library="supply2" library_urn="urn:adsk.eagle:library:372" deviceset="VDD" device=""/>
@@ -11321,6 +11312,7 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <part name="GND5" library="supply1" library_urn="urn:adsk.eagle:library:371" deviceset="GND" device=""/>
 <part name="GND6" library="supply1" library_urn="urn:adsk.eagle:library:371" deviceset="GND" device=""/>
 <part name="GND1" library="supply1" library_urn="urn:adsk.eagle:library:371" deviceset="GND" device=""/>
+<part name="Q2" library="microbuilder" deviceset="MOSFET-P" device="WIDE" value="IRLML6401"/>
 </parts>
 <sheets>
 <sheet>
@@ -11345,17 +11337,13 @@ saaralf Modellbahn</text>
 <attribute name="VALUE" x="257.81" y="88.9" size="1.778" layer="96" rot="MR0"/>
 <attribute name="NAME" x="257.81" y="145.542" size="1.778" layer="95" rot="MR0"/>
 </instance>
-<instance part="U1" gate="G$1" x="132.08" y="144.78" smashed="yes">
+<instance part="PCA9685" gate="G$1" x="132.08" y="144.78" smashed="yes">
 <attribute name="NAME" x="114.3" y="180.34" size="1.27" layer="95"/>
 <attribute name="VALUE" x="114.3" y="111.76" size="1.27" layer="96"/>
 </instance>
 <instance part="C1" gate="G$1" x="91.44" y="160.02" smashed="yes">
 <attribute name="NAME" x="89.15" y="161.27" size="1.27" layer="95" font="vector" rot="R90" align="center"/>
 <attribute name="VALUE" x="93.74" y="161.27" size="1.27" layer="96" font="vector" rot="R90" align="center"/>
-</instance>
-<instance part="Q1" gate="G$1" x="236.22" y="88.9" smashed="yes" rot="R90">
-<attribute name="VALUE" x="238.125" y="91.694" size="1.27" layer="96" rot="R90"/>
-<attribute name="NAME" x="235.839" y="91.694" size="1.27" layer="95" rot="R90"/>
 </instance>
 <instance part="C2" gate="G$1" x="228.6" y="81.28" smashed="yes" rot="MR0">
 <attribute name="NAME" x="225.044" y="81.915" size="1.778" layer="95" rot="MR0"/>
@@ -11470,6 +11458,10 @@ saaralf Modellbahn</text>
 <instance part="GND1" gate="1" x="99.06" y="175.26" smashed="yes" rot="R180">
 <attribute name="VALUE" x="101.6" y="177.8" size="1.778" layer="96" rot="R180"/>
 </instance>
+<instance part="Q2" gate="G$1" x="236.22" y="88.9" smashed="yes" rot="R90">
+<attribute name="VALUE" x="238.125" y="91.694" size="1.27" layer="96" rot="R90"/>
+<attribute name="NAME" x="235.839" y="91.694" size="1.27" layer="95" rot="R90"/>
+</instance>
 </instances>
 <busses>
 </busses>
@@ -11478,7 +11470,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="160.02" x2="162.56" y2="160.02" width="0.1524" layer="91"/>
 <label x="154.94" y="160.02" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM0"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM0"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="86.36" x2="195.58" y2="86.36" width="0.1524" layer="91"/>
@@ -11490,7 +11482,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="157.48" x2="162.56" y2="157.48" width="0.1524" layer="91"/>
 <label x="154.94" y="157.48" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM1"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM1"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="91.44" x2="195.58" y2="91.44" width="0.1524" layer="91"/>
@@ -11502,7 +11494,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="154.94" x2="162.56" y2="154.94" width="0.1524" layer="91"/>
 <label x="154.94" y="154.94" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM2"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM2"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="96.52" x2="195.58" y2="96.52" width="0.1524" layer="91"/>
@@ -11514,7 +11506,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="152.4" x2="162.56" y2="152.4" width="0.1524" layer="91"/>
 <label x="154.94" y="152.4" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM3"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM3"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="101.6" x2="195.58" y2="101.6" width="0.1524" layer="91"/>
@@ -11526,7 +11518,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="149.86" x2="162.56" y2="149.86" width="0.1524" layer="91"/>
 <label x="154.94" y="149.86" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM4"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM4"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="106.68" x2="195.58" y2="106.68" width="0.1524" layer="91"/>
@@ -11538,7 +11530,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="147.32" x2="162.56" y2="147.32" width="0.1524" layer="91"/>
 <label x="154.94" y="147.32" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM5"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM5"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="111.76" x2="195.58" y2="111.76" width="0.1524" layer="91"/>
@@ -11550,7 +11542,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="144.78" x2="162.56" y2="144.78" width="0.1524" layer="91"/>
 <label x="154.94" y="144.78" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM6"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM6"/>
 </segment>
 <segment>
 <wire x1="195.58" y1="116.84" x2="203.2" y2="116.84" width="0.1524" layer="91"/>
@@ -11562,7 +11554,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="142.24" x2="162.56" y2="142.24" width="0.1524" layer="91"/>
 <label x="154.94" y="142.24" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM7"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM7"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="121.92" x2="195.58" y2="121.92" width="0.1524" layer="91"/>
@@ -11574,7 +11566,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="139.7" x2="162.56" y2="139.7" width="0.1524" layer="91"/>
 <label x="154.94" y="139.7" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM8"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM8"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="127" x2="193.04" y2="127" width="0.1524" layer="91"/>
@@ -11586,7 +11578,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="137.16" x2="162.56" y2="137.16" width="0.1524" layer="91"/>
 <label x="154.94" y="137.16" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM9"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM9"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="132.08" x2="193.04" y2="132.08" width="0.1524" layer="91"/>
@@ -11598,7 +11590,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="134.62" x2="162.56" y2="134.62" width="0.1524" layer="91"/>
 <label x="154.94" y="134.62" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM10"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM10"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="137.16" x2="193.04" y2="137.16" width="0.1524" layer="91"/>
@@ -11610,7 +11602,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="132.08" x2="162.56" y2="132.08" width="0.1524" layer="91"/>
 <label x="154.94" y="132.08" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM11"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM11"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="142.24" x2="193.04" y2="142.24" width="0.1524" layer="91"/>
@@ -11622,7 +11614,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="129.54" x2="162.56" y2="129.54" width="0.1524" layer="91"/>
 <label x="154.94" y="129.54" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM12"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM12"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="147.32" x2="193.04" y2="147.32" width="0.1524" layer="91"/>
@@ -11634,7 +11626,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="127" x2="162.56" y2="127" width="0.1524" layer="91"/>
 <label x="154.94" y="127" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM13"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM13"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="152.4" x2="193.04" y2="152.4" width="0.1524" layer="91"/>
@@ -11646,7 +11638,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="124.46" x2="162.56" y2="124.46" width="0.1524" layer="91"/>
 <label x="154.94" y="124.46" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM14"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM14"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="157.48" x2="193.04" y2="157.48" width="0.1524" layer="91"/>
@@ -11658,7 +11650,7 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="152.4" y1="121.92" x2="162.56" y2="121.92" width="0.1524" layer="91"/>
 <label x="154.94" y="121.92" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="PWM15"/>
+<pinref part="PCA9685" gate="G$1" pin="PWM15"/>
 </segment>
 <segment>
 <wire x1="203.2" y1="162.56" x2="193.04" y2="162.56" width="0.1524" layer="91"/>
@@ -11675,7 +11667,6 @@ saaralf Modellbahn</text>
 <wire x1="228.6" y1="76.2" x2="228.6" y2="73.66" width="0.1524" layer="91"/>
 <wire x1="228.6" y1="73.66" x2="233.68" y2="73.66" width="0.1524" layer="91"/>
 <junction x="248.92" y="73.66"/>
-<pinref part="Q1" gate="G$1" pin="G"/>
 <wire x1="233.68" y1="73.66" x2="243.84" y2="73.66" width="0.1524" layer="91"/>
 <wire x1="243.84" y1="73.66" x2="248.92" y2="73.66" width="0.1524" layer="91"/>
 <wire x1="233.68" y1="83.82" x2="233.68" y2="73.66" width="0.1524" layer="91"/>
@@ -11686,14 +11677,15 @@ saaralf Modellbahn</text>
 <junction x="243.84" y="73.66"/>
 <label x="243.84" y="96.52" size="1.778" layer="95"/>
 <pinref part="GND2" gate="1" pin="GND"/>
+<pinref part="Q2" gate="G$1" pin="G"/>
 </segment>
 <segment>
 <wire x1="111.76" y1="121.92" x2="96.52" y2="121.92" width="0.1524" layer="91"/>
 <wire x1="96.52" y1="121.92" x2="96.52" y2="119.38" width="0.1524" layer="91"/>
-<pinref part="U1" gate="G$1" pin="GND"/>
+<pinref part="PCA9685" gate="G$1" pin="GND"/>
 <wire x1="111.76" y1="139.7" x2="96.52" y2="139.7" width="0.1524" layer="91"/>
 <label x="101.6" y="139.7" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="A0"/>
+<pinref part="PCA9685" gate="G$1" pin="A0"/>
 <wire x1="96.52" y1="139.7" x2="96.52" y2="137.16" width="0.1524" layer="91"/>
 <junction x="96.52" y="121.92"/>
 <wire x1="96.52" y1="137.16" x2="96.52" y2="134.62" width="0.1524" layer="91"/>
@@ -11703,23 +11695,23 @@ saaralf Modellbahn</text>
 <wire x1="96.52" y1="127" x2="96.52" y2="121.92" width="0.1524" layer="91"/>
 <wire x1="111.76" y1="127" x2="96.52" y2="127" width="0.1524" layer="91"/>
 <label x="101.6" y="127" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="A5"/>
+<pinref part="PCA9685" gate="G$1" pin="A5"/>
 <junction x="96.52" y="127"/>
 <wire x1="111.76" y1="129.54" x2="96.52" y2="129.54" width="0.1524" layer="91"/>
 <label x="101.6" y="129.54" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="A4"/>
+<pinref part="PCA9685" gate="G$1" pin="A4"/>
 <junction x="96.52" y="129.54"/>
 <wire x1="111.76" y1="132.08" x2="96.52" y2="132.08" width="0.1524" layer="91"/>
 <label x="101.6" y="132.08" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="A3"/>
+<pinref part="PCA9685" gate="G$1" pin="A3"/>
 <junction x="96.52" y="132.08"/>
 <wire x1="111.76" y1="134.62" x2="96.52" y2="134.62" width="0.1524" layer="91"/>
 <label x="101.6" y="134.62" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="A2"/>
+<pinref part="PCA9685" gate="G$1" pin="A2"/>
 <junction x="96.52" y="134.62"/>
 <wire x1="111.76" y1="137.16" x2="96.52" y2="137.16" width="0.1524" layer="91"/>
 <label x="101.6" y="137.16" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="A1"/>
+<pinref part="PCA9685" gate="G$1" pin="A1"/>
 <junction x="96.52" y="137.16"/>
 <pinref part="GND4" gate="1" pin="GND"/>
 </segment>
@@ -11728,7 +11720,7 @@ saaralf Modellbahn</text>
 <pinref part="C1" gate="G$1" pin="2"/>
 <wire x1="91.44" y1="142.24" x2="91.44" y2="119.38" width="0.1524" layer="91"/>
 <wire x1="111.76" y1="142.24" x2="91.44" y2="142.24" width="0.1524" layer="91"/>
-<pinref part="U1" gate="G$1" pin="EXTCLK"/>
+<pinref part="PCA9685" gate="G$1" pin="EXTCLK"/>
 <junction x="91.44" y="142.24"/>
 <label x="91.44" y="149.86" size="1.778" layer="95"/>
 <pinref part="GND5" gate="1" pin="GND"/>
@@ -11754,7 +11746,7 @@ saaralf Modellbahn</text>
 <wire x1="111.76" y1="147.32" x2="99.06" y2="147.32" width="0.1524" layer="91"/>
 <wire x1="99.06" y1="147.32" x2="99.06" y2="157.48" width="0.1524" layer="91"/>
 <label x="101.6" y="147.32" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="#OE"/>
+<pinref part="PCA9685" gate="G$1" pin="#OE"/>
 <pinref part="R7" gate="G$1" pin="1"/>
 </segment>
 </net>
@@ -11909,10 +11901,10 @@ saaralf Modellbahn</text>
 <segment>
 <wire x1="228.6" y1="88.9" x2="228.6" y2="83.82" width="0.1524" layer="91"/>
 <wire x1="231.14" y1="88.9" x2="228.6" y2="88.9" width="0.1524" layer="91"/>
-<pinref part="Q1" gate="G$1" pin="S"/>
 <pinref part="C2" gate="G$1" pin="+"/>
 <pinref part="P+2" gate="1" pin="+5V"/>
 <junction x="228.6" y="88.9"/>
+<pinref part="Q2" gate="G$1" pin="S"/>
 </segment>
 </net>
 <net name="SCL" class="0">
@@ -11921,7 +11913,7 @@ saaralf Modellbahn</text>
 <wire x1="58.42" y1="154.94" x2="20.32" y2="154.94" width="0.1524" layer="91"/>
 <label x="25.4" y="154.94" size="1.778" layer="95"/>
 <label x="101.6" y="152.4" size="1.778" layer="95"/>
-<pinref part="U1" gate="G$1" pin="SCL"/>
+<pinref part="PCA9685" gate="G$1" pin="SCL"/>
 <wire x1="111.76" y1="152.4" x2="58.42" y2="152.4" width="0.1524" layer="91"/>
 <wire x1="58.42" y1="152.4" x2="58.42" y2="154.94" width="0.1524" layer="91"/>
 <wire x1="58.42" y1="154.94" x2="58.42" y2="162.56" width="0.1524" layer="91"/>
@@ -11941,7 +11933,7 @@ saaralf Modellbahn</text>
 <wire x1="43.18" y1="157.48" x2="66.04" y2="157.48" width="0.1524" layer="91"/>
 <wire x1="66.04" y1="157.48" x2="66.04" y2="154.94" width="0.1524" layer="91"/>
 <junction x="66.04" y="157.48"/>
-<pinref part="U1" gate="G$1" pin="SDA"/>
+<pinref part="PCA9685" gate="G$1" pin="SDA"/>
 <wire x1="66.04" y1="154.94" x2="111.76" y2="154.94" width="0.1524" layer="91"/>
 <label x="93.98" y="154.94" size="1.778" layer="95"/>
 <pinref part="R9" gate="G$1" pin="1"/>
@@ -11959,7 +11951,7 @@ saaralf Modellbahn</text>
 <pinref part="SUPPLY4" gate="G$1" pin="VDD"/>
 </segment>
 <segment>
-<pinref part="U1" gate="G$1" pin="VDD"/>
+<pinref part="PCA9685" gate="G$1" pin="VDD"/>
 <wire x1="111.76" y1="160.02" x2="106.68" y2="160.02" width="0.1524" layer="91"/>
 <wire x1="106.68" y1="160.02" x2="106.68" y2="170.18" width="0.1524" layer="91"/>
 <wire x1="106.68" y1="170.18" x2="91.44" y2="170.18" width="0.1524" layer="91"/>
@@ -11980,11 +11972,11 @@ saaralf Modellbahn</text>
 </net>
 <net name="+5VPIN3" class="0">
 <segment>
-<pinref part="Q1" gate="G$1" pin="D"/>
 <wire x1="241.3" y1="88.9" x2="241.3" y2="99.06" width="0.1524" layer="91"/>
 <pinref part="JP2" gate="1" pin="3"/>
 <wire x1="241.3" y1="99.06" x2="248.92" y2="99.06" width="0.1524" layer="91"/>
 <label x="243.84" y="99.06" size="1.778" layer="95"/>
+<pinref part="Q2" gate="G$1" pin="D"/>
 </segment>
 </net>
 </nets>

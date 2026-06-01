@@ -1,0 +1,35 @@
+Partlist
+
+Exported from Servo.sch at 31.05.26 19:52
+
+EAGLE Version 9.6.2 Copyright (c) 1988-2020 Autodesk, Inc.
+
+Assembly variant: 
+
+Part     Value          Device                    Package    Library      Sheet
+
+C1       10uF           CAP_CERAMIC0805-NOOUTLINE 0805-NO    microbuilder 1
+C2       1000µF         CPOL-USE3.5-8             E3,5-8     adafruit     1
+JP1      J1             MA20-1                    MA20-1     con-lstb     1
+JP2      J2             MA20-1                    MA20-1     con-lstb     1
+Q2       IRLML6401      MOSFET-PWIDE              SOT23-WIDE microbuilder 1
+R2       220            R-EU_M0805                M0805      rcl          1
+R3       220            R-EU_M0805                M0805      rcl          1
+R4       220            R-EU_M0805                M0805      rcl          1
+R5       220            R-EU_M0805                M0805      rcl          1
+R6       220            R-EU_M0805                M0805      rcl          1
+R7       10K            R-EU_M0805                M0805      rcl          1
+R8       220            R-EU_M0805                M0805      rcl          1
+R9       10K            R-EU_M0805                M0805      rcl          1
+R10      10K            R-EU_M0805                M0805      rcl          1
+R11      220            R-EU_M0805                M0805      rcl          1
+R12      220            R-EU_M0805                M0805      rcl          1
+R13      220            R-EU_M0805                M0805      rcl          1
+R14      220            R-EU_M0805                M0805      rcl          1
+R15      220            R-EU_M0805                M0805      rcl          1
+R16      220            R-EU_M0805                M0805      rcl          1
+R17      220            R-EU_M0805                M0805      rcl          1
+R18      220            R-EU_M0805                M0805      rcl          1
+R19      220            R-EU_M0805                M0805      rcl          1
+R20      220            R-EU_M0805                M0805      rcl          1
+U1       PCA9685        PCA9685                   TSSOP28    microbuilder 1

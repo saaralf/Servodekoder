@@ -1,0 +1,337 @@
+/****************************************************************************
+** Meta object code from reading C++ file 'sx_monitor_qt_v2.cpp'
+**
+** Created by: The Qt Meta Object Compiler version 68 (Qt 6.4.2)
+**
+** WARNING! All changes made in this file will be lost!
+*****************************************************************************/
+
+#include <memory>
+#include <QtCore/qmetatype.h>
+#if !defined(Q_MOC_OUTPUT_REVISION)
+#error "The header file 'sx_monitor_qt_v2.cpp' doesn't include <QObject>."
+#elif Q_MOC_OUTPUT_REVISION != 68
+#error "This file was generated using the moc from 6.4.2. It"
+#error "cannot be used with the include files from this version of Qt."
+#error "(The moc has changed too much.)"
+#endif
+
+#ifndef Q_CONSTINIT
+#define Q_CONSTINIT
+#endif
+
+QT_BEGIN_MOC_NAMESPACE
+QT_WARNING_PUSH
+QT_WARNING_DISABLE_DEPRECATED
+namespace {
+struct qt_meta_stringdata_MainWin_t {
+    uint offsetsAndSizes[64];
+    char stringdata0[8];
+    char stringdata1[10];
+    char stringdata2[1];
+    char stringdata3[13];
+    char stringdata4[14];
+    char stringdata5[17];
+    char stringdata6[14];
+    char stringdata7[4];
+    char stringdata8[7];
+    char stringdata9[4];
+    char stringdata10[4];
+    char stringdata11[10];
+    char stringdata12[17];
+    char stringdata13[17];
+    char stringdata14[14];
+    char stringdata15[10];
+    char stringdata16[14];
+    char stringdata17[10];
+    char stringdata18[10];
+    char stringdata19[5];
+    char stringdata20[8];
+    char stringdata21[22];
+    char stringdata22[16];
+    char stringdata23[4];
+    char stringdata24[4];
+    char stringdata25[11];
+    char stringdata26[14];
+    char stringdata27[33];
+    char stringdata28[24];
+    char stringdata29[9];
+    char stringdata30[19];
+    char stringdata31[5];
+};
+#define QT_MOC_LITERAL(ofs, len) \
+    uint(sizeof(qt_meta_stringdata_MainWin_t::offsetsAndSizes) + ofs), len 
+Q_CONSTINIT static const qt_meta_stringdata_MainWin_t qt_meta_stringdata_MainWin = {
+    {
+        QT_MOC_LITERAL(0, 7),  // "MainWin"
+        QT_MOC_LITERAL(8, 9),  // "doConnect"
+        QT_MOC_LITERAL(18, 0),  // ""
+        QT_MOC_LITERAL(19, 12),  // "doDisconnect"
+        QT_MOC_LITERAL(32, 13),  // "doTeleConnect"
+        QT_MOC_LITERAL(46, 16),  // "doTeleDisconnect"
+        QT_MOC_LITERAL(63, 13),  // "isReservedAdr"
+        QT_MOC_LITERAL(77, 3),  // "adr"
+        QT_MOC_LITERAL(81, 6),  // "sendSX"
+        QT_MOC_LITERAL(88, 3),  // "bus"
+        QT_MOC_LITERAL(92, 3),  // "val"
+        QT_MOC_LITERAL(96, 9),  // "sendValue"
+        QT_MOC_LITERAL(106, 16),  // "selRautenhausBus"
+        QT_MOC_LITERAL(123, 16),  // "commandReadSXbus"
+        QT_MOC_LITERAL(140, 13),  // "readSXbusByte"
+        QT_MOC_LITERAL(154, 9),  // "timeoutMs"
+        QT_MOC_LITERAL(164, 13),  // "readSXbusPair"
+        QT_MOC_LITERAL(178, 9),  // "expectBus"
+        QT_MOC_LITERAL(188, 9),  // "expectAdr"
+        QT_MOC_LITERAL(198, 4),  // "int&"
+        QT_MOC_LITERAL(203, 7),  // "outData"
+        QT_MOC_LITERAL(211, 21),  // "pollTrackViaSelectrix"
+        QT_MOC_LITERAL(233, 15),  // "openSwitchPanel"
+        QT_MOC_LITERAL(249, 3),  // "row"
+        QT_MOC_LITERAL(253, 3),  // "col"
+        QT_MOC_LITERAL(257, 10),  // "pollSerial"
+        QT_MOC_LITERAL(268, 13),  // "pollTelemetry"
+        QT_MOC_LITERAL(282, 32),  // "updateTrackStateUiForSelectedBus"
+        QT_MOC_LITERAL(315, 23),  // "updateTrackStateFromBus"
+        QT_MOC_LITERAL(339, 8),  // "trackBit"
+        QT_MOC_LITERAL(348, 18),  // "parseTelemetryLine"
+        QT_MOC_LITERAL(367, 4)   // "line"
+    },
+    "MainWin",
+    "doConnect",
+    "",
+    "doDisconnect",
+    "doTeleConnect",
+    "doTeleDisconnect",
+    "isReservedAdr",
+    "adr",
+    "sendSX",
+    "bus",
+    "val",
+    "sendValue",
+    "selRautenhausBus",
+    "commandReadSXbus",
+    "readSXbusByte",
+    "timeoutMs",
+    "readSXbusPair",
+    "expectBus",
+    "expectAdr",
+    "int&",
+    "outData",
+    "pollTrackViaSelectrix",
+    "openSwitchPanel",
+    "row",
+    "col",
+    "pollSerial",
+    "pollTelemetry",
+    "updateTrackStateUiForSelectedBus",
+    "updateTrackStateFromBus",
+    "trackBit",
+    "parseTelemetryLine",
+    "line"
+};
+#undef QT_MOC_LITERAL
+} // unnamed namespace
+
+Q_CONSTINIT static const uint qt_meta_data_MainWin[] = {
+
+ // content:
+      10,       // revision
+       0,       // classname
+       0,    0, // classinfo
+      20,   14, // methods
+       0,    0, // properties
+       0,    0, // enums/sets
+       0,    0, // constructors
+       0,       // flags
+       0,       // signalCount
+
+ // slots: name, argc, parameters, tag, flags, initial metatype offsets
+       1,    0,  134,    2, 0x08,    1 /* Private */,
+       3,    0,  135,    2, 0x08,    2 /* Private */,
+       4,    0,  136,    2, 0x08,    3 /* Private */,
+       5,    0,  137,    2, 0x08,    4 /* Private */,
+       6,    1,  138,    2, 0x108,    5 /* Private | MethodIsConst  */,
+       8,    3,  141,    2, 0x08,    7 /* Private */,
+      11,    0,  148,    2, 0x08,   11 /* Private */,
+      12,    1,  149,    2, 0x08,   12 /* Private */,
+      13,    2,  152,    2, 0x08,   14 /* Private */,
+      14,    1,  157,    2, 0x08,   17 /* Private */,
+      14,    0,  160,    2, 0x28,   19 /* Private | MethodCloned */,
+      16,    4,  161,    2, 0x08,   20 /* Private */,
+      16,    3,  170,    2, 0x28,   25 /* Private | MethodCloned */,
+      21,    0,  177,    2, 0x08,   29 /* Private */,
+      22,    2,  178,    2, 0x08,   30 /* Private */,
+      25,    0,  183,    2, 0x08,   33 /* Private */,
+      26,    0,  184,    2, 0x08,   34 /* Private */,
+      27,    0,  185,    2, 0x08,   35 /* Private */,
+      28,    2,  186,    2, 0x08,   36 /* Private */,
+      30,    1,  191,    2, 0x08,   39 /* Private */,
+
+ // slots: parameters
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Bool, QMetaType::Int,    7,
+    QMetaType::Bool, QMetaType::Int, QMetaType::Int, QMetaType::Int,    9,    7,   10,
+    QMetaType::Void,
+    QMetaType::Bool, QMetaType::Int,    9,
+    QMetaType::Bool, QMetaType::Int, QMetaType::Int,    9,    7,
+    QMetaType::Int, QMetaType::Int,   15,
+    QMetaType::Int,
+    QMetaType::Bool, QMetaType::Int, QMetaType::Int, 0x80000000 | 19, QMetaType::Int,   17,   18,   20,   15,
+    QMetaType::Bool, QMetaType::Int, QMetaType::Int, 0x80000000 | 19,   17,   18,   20,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int, QMetaType::Int,   23,   24,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void,
+    QMetaType::Void, QMetaType::Int, QMetaType::Int,    9,   29,
+    QMetaType::Void, QMetaType::QString,   31,
+
+       0        // eod
+};
+
+Q_CONSTINIT const QMetaObject MainWin::staticMetaObject = { {
+    QMetaObject::SuperData::link<QMainWindow::staticMetaObject>(),
+    qt_meta_stringdata_MainWin.offsetsAndSizes,
+    qt_meta_data_MainWin,
+    qt_static_metacall,
+    nullptr,
+    qt_incomplete_metaTypeArray<qt_meta_stringdata_MainWin_t,
+        // Q_OBJECT / Q_GADGET
+        QtPrivate::TypeAndForceComplete<MainWin, std::true_type>,
+        // method 'doConnect'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'doDisconnect'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'doTeleConnect'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'doTeleDisconnect'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'isReservedAdr'
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'sendSX'
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'sendValue'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'selRautenhausBus'
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'commandReadSXbus'
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'readSXbusByte'
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'readSXbusByte'
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'readSXbusPair'
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int &, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'readSXbusPair'
+        QtPrivate::TypeAndForceComplete<bool, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int &, std::false_type>,
+        // method 'pollTrackViaSelectrix'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'openSwitchPanel'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'pollSerial'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'pollTelemetry'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'updateTrackStateUiForSelectedBus'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        // method 'updateTrackStateFromBus'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        QtPrivate::TypeAndForceComplete<int, std::false_type>,
+        // method 'parseTelemetryLine'
+        QtPrivate::TypeAndForceComplete<void, std::false_type>,
+        QtPrivate::TypeAndForceComplete<const QString &, std::false_type>
+    >,
+    nullptr
+} };
+
+void MainWin::qt_static_metacall(QObject *_o, QMetaObject::Call _c, int _id, void **_a)
+{
+    if (_c == QMetaObject::InvokeMetaMethod) {
+        auto *_t = static_cast<MainWin *>(_o);
+        (void)_t;
+        switch (_id) {
+        case 0: _t->doConnect(); break;
+        case 1: _t->doDisconnect(); break;
+        case 2: _t->doTeleConnect(); break;
+        case 3: _t->doTeleDisconnect(); break;
+        case 4: { bool _r = _t->isReservedAdr((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])));
+            if (_a[0]) *reinterpret_cast< bool*>(_a[0]) = std::move(_r); }  break;
+        case 5: { bool _r = _t->sendSX((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[3])));
+            if (_a[0]) *reinterpret_cast< bool*>(_a[0]) = std::move(_r); }  break;
+        case 6: _t->sendValue(); break;
+        case 7: { bool _r = _t->selRautenhausBus((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])));
+            if (_a[0]) *reinterpret_cast< bool*>(_a[0]) = std::move(_r); }  break;
+        case 8: { bool _r = _t->commandReadSXbus((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2])));
+            if (_a[0]) *reinterpret_cast< bool*>(_a[0]) = std::move(_r); }  break;
+        case 9: { int _r = _t->readSXbusByte((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])));
+            if (_a[0]) *reinterpret_cast< int*>(_a[0]) = std::move(_r); }  break;
+        case 10: { int _r = _t->readSXbusByte();
+            if (_a[0]) *reinterpret_cast< int*>(_a[0]) = std::move(_r); }  break;
+        case 11: { bool _r = _t->readSXbusPair((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2])),(*reinterpret_cast< std::add_pointer_t<int&>>(_a[3])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[4])));
+            if (_a[0]) *reinterpret_cast< bool*>(_a[0]) = std::move(_r); }  break;
+        case 12: { bool _r = _t->readSXbusPair((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2])),(*reinterpret_cast< std::add_pointer_t<int&>>(_a[3])));
+            if (_a[0]) *reinterpret_cast< bool*>(_a[0]) = std::move(_r); }  break;
+        case 13: _t->pollTrackViaSelectrix(); break;
+        case 14: _t->openSwitchPanel((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2]))); break;
+        case 15: _t->pollSerial(); break;
+        case 16: _t->pollTelemetry(); break;
+        case 17: _t->updateTrackStateUiForSelectedBus(); break;
+        case 18: _t->updateTrackStateFromBus((*reinterpret_cast< std::add_pointer_t<int>>(_a[1])),(*reinterpret_cast< std::add_pointer_t<int>>(_a[2]))); break;
+        case 19: _t->parseTelemetryLine((*reinterpret_cast< std::add_pointer_t<QString>>(_a[1]))); break;
+        default: ;
+        }
+    }
+}
+
+const QMetaObject *MainWin::metaObject() const
+{
+    return QObject::d_ptr->metaObject ? QObject::d_ptr->dynamicMetaObject() : &staticMetaObject;
+}
+
+void *MainWin::qt_metacast(const char *_clname)
+{
+    if (!_clname) return nullptr;
+    if (!strcmp(_clname, qt_meta_stringdata_MainWin.stringdata0))
+        return static_cast<void*>(this);
+    return QMainWindow::qt_metacast(_clname);
+}
+
+int MainWin::qt_metacall(QMetaObject::Call _c, int _id, void **_a)
+{
+    _id = QMainWindow::qt_metacall(_c, _id, _a);
+    if (_id < 0)
+        return _id;
+    if (_c == QMetaObject::InvokeMetaMethod) {
+        if (_id < 20)
+            qt_static_metacall(this, _c, _id, _a);
+        _id -= 20;
+    } else if (_c == QMetaObject::RegisterMethodArgumentMetaType) {
+        if (_id < 20)
+            *reinterpret_cast<QMetaType *>(_a[0]) = QMetaType();
+        _id -= 20;
+    }
+    return _id;
+}
+QT_WARNING_POP
+QT_END_MOC_NAMESPACE

@@ -1,0 +1,53 @@
+#include "connection_panel.h"
+#include <QHBoxLayout>
+#include <QLabel>
+#include <QLineEdit>
+#include <QPushButton>
+
+ConnectionPanel::ConnectionPanel(const QString& title, const QString& defaultEndpoint, int defaultBaud, QWidget* parent)
+    : QWidget(parent){
+    auto* l = new QHBoxLayout(this);
+    titleLbl = new QLabel(title);
+    endpointEdit = new QLineEdit(defaultEndpoint);
+    baudEdit = new QLineEdit(QString::number(defaultBaud));
+    baudEdit->setFixedWidth(80);
+    connectBtn = new QPushButton("Connect");
+    disconnectBtn = new QPushButton("Disconnect");
+    disconnectBtn->setEnabled(false);
+    statusLbl = new QLabel("offline");
+    statusLbl->setFixedWidth(170);
+    statusLbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    trackLbl = new QLabel("Track: ?");
+    trackLbl->setFixedWidth(95);
+    trackLbl->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    l->addWidget(titleLbl); l->addWidget(new QLabel("Endpoint:")); l->addWidget(endpointEdit,1);
+    l->addWidget(new QLabel("Baud:")); l->addWidget(baudEdit);
+    l->addWidget(connectBtn); l->addWidget(disconnectBtn); l->addWidget(statusLbl); l->addWidget(trackLbl);
+    connect(connectBtn,&QPushButton::clicked,this,[this]{ emit connectRequested(endpoint(), baud()); });
+    connect(disconnectBtn,&QPushButton::clicked,this,[this]{ emit disconnectRequested(); });
+}
+QString ConnectionPanel::endpoint() const { return endpointEdit->text().trimmed(); }
+int ConnectionPanel::baud() const { return baudEdit->text().toInt(); }
+void ConnectionPanel::setConnected(bool on){
+    statusLbl->setText(on?"online":"offline");
+    statusLbl->setStyleSheet(on ? "QLabel{color:#0a7f20; font-weight:600;}" : "QLabel{color:#8a0000; font-weight:600;}");
+    connectBtn->setEnabled(!on);
+    connectBtn->setStyleSheet(on ? "QPushButton{background:#2fa84f; color:white; font-weight:600;}" : "");
+    disconnectBtn->setEnabled(on);
+}
+void ConnectionPanel::setHardwareWarning(bool on){
+    if(on){
+        statusLbl->setText("daemon online / HW ?");
+        statusLbl->setStyleSheet("QLabel{color:#8a6500; font-weight:600;}");
+        connectBtn->setStyleSheet("QPushButton{background:#f2c94c; color:#202020; font-weight:600;}");
+    } else {
+        statusLbl->setText("online");
+        statusLbl->setStyleSheet("QLabel{color:#0a7f20; font-weight:600;}");
+        connectBtn->setStyleSheet("QPushButton{background:#2fa84f; color:white; font-weight:600;}");
+    }
+}
+void ConnectionPanel::setTrackState(int t){
+    if(t<0) trackLbl->setText("Track: ?");
+    else if(t==0) trackLbl->setText("Track: AUS");
+    else trackLbl->setText("Track: AN");
+}

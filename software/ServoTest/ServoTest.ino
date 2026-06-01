@@ -1,4 +1,27 @@
 #include <Wire.h>
+#include <EEPROM.h>
+
+// EEPROM‑Struktur für links/rechts Endpunkte pro Servo
+struct ServoEndpoints {
+  uint8_t left[SERVO_COUNT];
+  uint8_t right[SERVO_COUNT];
+} eps;
+
+// Laden oder Defaults setzen (links=20°, rechts=160°)
+void loadEndpoints() {
+  EEPROM.get(0, eps);
+  // einfache Validierung: wenn erstes Element 0, dann noch nie gespeichert
+  if (eps.left[0] == 0 && eps.right[0] == 0) {
+    for (uint8_t i = 0; i < SERVO_COUNT; i++) {
+      eps.left[i] = 20;  // physikalischer Winkel 0..180
+      eps.right[i] = 160;
+    }
+    EEPROM.put(0, eps);
+    Serial.println(F("EEPROM‑Defaults (links/rechts) gespeichert"));
+  } else {
+    Serial.println(F("EEPROM‑Endpunkte geladen"));
+  }
+}
 #include <Adafruit_PWMServoDriver.h>
 
 // PCA9685 auf dem ServoAufsatz
@@ -26,11 +49,20 @@ void setServoAngle(uint8_t channel, uint8_t angle) {
   pwm.setPWM(channel, 0, tick);
 }
 
-void allServos(uint8_t angle) {
+void moveAllLeft() {
   for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
-    setServoAngle(ch, angle);
+    setServoAngle(ch, eps.left[ch]);
   }
+  Serial.println(F("Alle Servos -> links (gespeicherter Endpunkt)"));
 }
+
+void moveAllRight() {
+  for (uint8_t ch = 0; ch < SERVO_COUNT; ch++) {
+    setServoAngle(ch, eps.right[ch]);
+  }
+  Serial.println(F("Alle Servos -> rechts (gespeicherter Endpunkt)"));
+}
+
 
 void setServo0Signed(int16_t signedAngle) {
   if (signedAngle < -90) signedAngle = -90;
@@ -85,7 +117,8 @@ void printHelp() {
   Serial.println(F("  a <winkel>     -> alle 16 Servos auf Winkel (0..180 physisch)"));
   Serial.println(F("  c <ch> <w>     -> Kanal ch (0..15) auf Winkel w (0..180 physisch)"));
   Serial.println(F("  d              -> Demofahrt"));
-  Serial.println(F("  t              -> Servo-0-Test (-30/+30)"));
+  Serial.println(F("  L              -> Alle Servos nach links (gespeicherter Endpunkt)"));
+  Serial.println(F("  R              -> Alle Servos nach rechts (gespeicherter Endpunkt)"));
   Serial.println(F("  0              -> Servo 0 auf signed 0 (Mitte)"));
   Serial.println(F("  +              -> Servo 0 +5 Grad (signed)"));
   Serial.println(F("  -              -> Servo 0 -5 Grad (signed)"));
@@ -133,6 +166,9 @@ void setup() {
   Serial.println(F("Wichtig: Externe 5V fuer Servo-V+ verwenden, GND gemeinsam."));
 
   scanI2C();
+
+  // Endpunkte aus EEPROM laden (oder Defaults setzen)
+  loadEndpoints();
 
   // Grundstellung: signed 0 (Mitte)
   setServo0Signed(0);
@@ -193,5 +229,9 @@ void loop() {
       Serial.print(F(" -> phys "));
       Serial.println(w);
     }
+  } else if (cmd == 'L') {
+    moveAllLeft();
+  } else if (cmd == 'R') {
+    moveAllRight();
   }
-}
+  }
