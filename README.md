@@ -25,6 +25,7 @@ Dieses Repository enthält:
   ![Servo-Aufsatz](docs/images/servo-aufsatz-platine.png)
 - Basisplatine:
   ![Basisplatine Servo](docs/images/basisplatine-servo.png)
+<img width="1054" height="1172" alt="grafik" src="https://github.com/user-attachments/assets/ea87dabb-5528-4ef6-86b4-de81de2d1f47" />
 
 ## Test
 - Sketch hochladen: `software/ServoTest/ServoTest.ino`
