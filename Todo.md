@@ -15,6 +15,7 @@ Stand: in Arbeit (Servo-Bildansicht V2 + Telemetrie-Sync)
 - [x] Qt-V2-Protokoll wird zusätzlich in Dateien geschrieben (`~/SXServo-Logs/sxservo_qt_v2_latest.log` + Zeitstempel-Log)
 - [x] V2 Gleisindikator gehärtet (SX0/SX1 Umschaltung zeigt sofort bekannten Trackstatus; unbekannt wird als `?` dargestellt)
 - [x] `Progmodus anfordern` blockiert bei `Track=1` jetzt hart (Warnung + kein K10-Start)
+- [x] Serial-Setup `s` kann SX-Adressen setzen: `p <0..111>` = Adresse A, `o <0..111>` = Adresse B, `0` deaktiviert, beide 0 verboten
 - [ ] Optional: Servo-Relax (PWM nach Stellvorgang aus) gegen Haltestrom
 
 ## Implementiert
@@ -27,7 +28,7 @@ Firmware (SX30-ServoDecoder/src/main.cpp)
 - K15 ACK: 0 idle, 1 ok, 2 error, 3 busy
 - Serial- und SX-Setup greifen auf denselben Setup-Zustand zu.
 - SX-Setup und Serial-Setup gegeneinander entkoppelt (robuster Betrieb)
-- Versionsausgabe in Firmware aktiv (derzeit: 2026-05-04f)
+- Versionsausgabe in Firmware aktiv (derzeit: 2026-06-26-SerialSxAddr)
 
 GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 - Servo-Programmer auf Wizard-Bedienung umgestellt.
@@ -117,6 +118,7 @@ GUI (sx-monitor-qt/sx_monitor_qt.cpp)
 - 2026-05-08: V2-Queue/BUSY/Timeout verfeinert: pro Servo Move-Queue mit ACK-gesteuerter Schritt-für-Schritt-Abarbeitung ergänzt (auch bei schnellem Klicken), dynamischer ACK-Timeout pro Servo eingebaut, Queue-Status im Tile-Titel sichtbar (`Q:+/-n`).
 - 2026-05-12: Lokaler Prog-Taster bekommt eigene Telemetrie `PROG_STATUS active=1/0 source=local_button track=... led=...`; Qt V2 wertet diese Zeile aus und zeigt Progstatus/D13 im V2-Statuslabel an. Nach Fehlerdiagnose ergänzt: Bei `PROG_STATUS active=1 source=local_button` sendet Qt im Serial-Wizard automatisch `s`, damit der Decoder wirklich in den Servo-Setup-Wizard wechselt; Firmware `2026-05-12b` beendet dabei den klassischen Modul-Programmierstatus (`programming=false`). Qt-Build erfolgreich; Firmware-Build lokal nicht möglich, weil PlatformIO/pio in dieser Shell fehlt.
 - 2026-05-12: Qt V2 schreibt das Änderungsprotokoll zusätzlich dauerhaft nach `~/SXServo-Logs/sxservo_qt_v2_latest.log` (immer aktueller Lauf, überschrieben) und in ein Zeitstempel-Log `~/SXServo-Logs/sxservo_qt_v2_YYYYMMDD_HHMMSS.log`. Headless-Test hat Datei erzeugt und Start-/Logpfad-Zeilen geschrieben.
+- 2026-06-26: Firmware `2026-06-26-SerialSxAddr`: Serial-Setup `s` um SX-Adressprogrammierung erweitert. `p <0..111>` setzt Adresse A, `o <0..111>` setzt Adresse B; `0` deaktiviert eine Hälfte, beide 0 werden abgelehnt. PlatformIO-Build erfolgreich.
 
 
 1) Ergebnis:  *  Executing task: platformio device monitor 

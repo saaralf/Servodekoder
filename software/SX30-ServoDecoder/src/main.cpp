@@ -27,6 +27,12 @@
 #define PROGBUTTON A6
 #define KEYPRESS (analogRead(PROGBUTTON) > 512)
 #define DEBOUNCETIME 200
+#define DEBUG_SERIAL 1
+
+// Unfertiger Programmier-Wizard ueber SX-Bus.
+// 0 = komplett deaktiviert; serielles Servo-Setup bleibt aktiv.
+// 1 = SX-Setup-Wizard kompilieren/aktivieren.
+#define ENABLE_SX_SETUP_WIZARD 0
 
 // SX30 ISR auf INT0
 void sxisr();
@@ -39,7 +45,7 @@ const uint16_t SERVO_MIN_TICK = 110; // bei Bedarf kalibrieren
 const uint16_t SERVO_MAX_TICK = 500; // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
-const char FW_VERSION[] = "2026-05-30-ABeingebaut";
+const char FW_VERSION[] = "2026-08-30-Button-S-W";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
@@ -301,8 +307,10 @@ void processPendingServoStep()
 
 void setDefaults()
 {
-  cfg.sxAddrA = 72;
-  cfg.sxAddrB = 73;
+  // SX-Adresse A ist Pflichtadresse und standardmaessig 3.
+  // SX-Adresse B ist optional; 0 bedeutet "nicht benutzt".
+  cfg.sxAddrA = 3;
+  cfg.sxAddrB = 0;
 
   for (uint8_t i = 0; i < SERVO_COUNT; i++)
   {
@@ -317,10 +325,12 @@ bool configValid(const DecoderCfg &c)
 {
   if (c.magic != CFG_MAGIC)
     return false;
-  if (!validOrDisabledSxAddr(c.sxAddrA) || !validOrDisabledSxAddr(c.sxAddrB))
+  // Adresse A ist Pflicht: 1..111.
+  if (!validSxAddr(c.sxAddrA))
     return false;
-  // Mindestens eine SX-Adresse muss aktiv sein
-  if (!sxAddrEnabled(c.sxAddrA) && !sxAddrEnabled(c.sxAddrB))
+
+  // Adresse B ist optional: 0 = nicht benutzt, sonst 1..111.
+  if (!validOrDisabledSxAddr(c.sxAddrB))
     return false;
 
   for (uint8_t i = 0; i < SERVO_COUNT; i++)
@@ -402,9 +412,150 @@ void printSetupHelp()
   Serial.println(F("1/2/5 = Schrittweite 1/2/5"));
   Serial.println(F("a = gespeicherte Abzweig-Position anfahren"));
   Serial.println(F("g = gespeicherte Gerade-Position anfahren"));
+  Serial.println(F("p <1..111> = SX-Adresse A setzen (Pflichtadresse, Default=3)"));
+  Serial.println(F("o <0..111> = SX-Adresse B setzen (0=nicht benutzt)"));
   Serial.println(F("+ = nach rechts, - = nach links (um Schrittweite)"));
   Serial.println(F("w = alles speichern und Setup beenden"));
+  Serial.println(F("Taster = wie w: speichern und Setup beenden"));
   Serial.println(F("x = Setup ohne Speichern beenden"));
+}
+
+bool readSerialUint8Argument(uint8_t &value)
+{
+  // Interaktive Eingabe:
+  // Nach 'p' bzw. 'o' darf der Benutzer die Adresse normal eintippen,
+  // z.B. "p 20" und danach ENTER. Die alte 50-ms-Grenze war fuer
+  // manuelles Tippen zu kurz und machte aus 20 bereits nach der '2' den Wert 2.
+
+  const unsigned long firstCharTimeoutMs = 5000;
+  const unsigned long interCharTimeoutMs = 1500;
+
+  unsigned long startMs = millis();
+
+  // Zunaechst Leerzeichen / CR / LF verwerfen und auf die erste Ziffer warten.
+  while (true)
+  {
+    if (Serial.available() > 0)
+    {
+      char c = (char)Serial.peek();
+
+      if (c == ' ' || c == '\t' || c == '\r' || c == '\n')
+      {
+        Serial.read();
+        continue;
+      }
+
+      if (!isDigit(c))
+        return false;
+
+      break;
+    }
+
+    if (millis() - startMs >= firstCharTimeoutMs)
+      return false;
+
+    delay(1);
+  }
+
+  uint16_t parsed = 0;
+  unsigned long lastDigitMs = millis();
+
+  while (true)
+  {
+    if (Serial.available() > 0)
+    {
+      char c = (char)Serial.peek();
+
+      if (isDigit(c))
+      {
+        parsed = (uint16_t)(parsed * 10 + (Serial.read() - '0'));
+
+        if (parsed > 255)
+          return false;
+
+        lastDigitMs = millis();
+        continue;
+      }
+
+      // ENTER / Leerzeichen beendet die Zahl sauber.
+      if (c == '\r' || c == '\n' || c == ' ' || c == '\t')
+      {
+        Serial.read();
+        break;
+      }
+
+      // Unerwartetes Zeichen beendet die Eingabe als Fehler.
+      return false;
+    }
+
+    // Falls kein ENTER gesendet wird, nach ausreichend langer Tipp-Pause
+    // die bisher eingegebene Zahl uebernehmen.
+    if (millis() - lastDigitMs >= interCharTimeoutMs)
+      break;
+
+    delay(1);
+  }
+
+  value = (uint8_t)parsed;
+  return true;
+}
+
+void printSxAddressStatus()
+{
+  Serial.print(F("SX-Adresse A: "));
+  Serial.println(cfg.sxAddrA);
+
+  if (cfg.sxAddrB == SX_ADDR_DISABLED)
+  {
+    Serial.println(F("SX-Adresse B: nicht benutzt (0)"));
+  }
+  else
+  {
+    Serial.print(F("SX-Adresse B: "));
+    Serial.println(cfg.sxAddrB);
+  }
+}
+
+void handleSerialSxAddressCommand(char cmd)
+{
+  uint8_t newAddr = 0;
+  if (!readSerialUint8Argument(newAddr))
+  {
+    Serial.println(F("FEHLER: erwartet Zahl 0..111, z.B. 'p 72' oder 'o 73'."));
+    return;
+  }
+
+  const bool isAddrA = (cmd == 'p' || cmd == 'P');
+
+  if (isAddrA)
+  {
+    // Adresse A ist zwingend vorhanden.
+    if (!validSxAddr(newAddr))
+    {
+      Serial.println(F("FEHLER: SX-Adresse A muss zwischen 1 und 111 liegen."));
+      return;
+    }
+  }
+  else
+  {
+    // Adresse B darf mit 0 deaktiviert werden.
+    if (!validOrDisabledSxAddr(newAddr))
+    {
+      Serial.println(F("FEHLER: SX-Adresse B muss 0 oder zwischen 1 und 111 liegen."));
+      return;
+    }
+  }
+
+  if (isAddrA)
+    cfg.sxAddrA = newAddr;
+  else
+    cfg.sxAddrB = newAddr;
+  Serial.print(F("OK: SX-Adresse "));
+  Serial.print((cmd == 'p' || cmd == 'P') ? 'A' : 'B');
+  Serial.print(F("="));
+  Serial.print(newAddr);
+  Serial.println(F(" gesetzt (Speichern mit 'w')."));
+  printSxAddressStatus();
 }
 
 void setupTelemetryMove(const __FlashStringHelper *src, int16_t step, int8_t moveCmd, int16_t relBefore, int16_t relAfter)
@@ -522,6 +673,72 @@ void setupSelectServo(uint8_t ch)
   setupTelemetryState(F("core"), F("select"));
 }
 
+void debugPrintConfigTable(const __FlashStringHelper *source)
+{
+#if DEBUG_SERIAL
+
+  Serial.println();
+  Serial.println(F("=============================================================="));
+  Serial.print(F(" SERVO DECODER CONFIG - "));
+  Serial.println(source);
+  Serial.println(F("=============================================================="));
+
+  Serial.print(F("SX-Adresse A: "));
+  Serial.println(cfg.sxAddrA);
+
+  Serial.print(F("SX-Adresse B: "));
+  Serial.println(cfg.sxAddrB);
+
+  Serial.println();
+
+  Serial.println(F("Servo | Zero | RelMin | RelMax | Abzweig"));
+  Serial.println(F("------+------|--------|--------|---------"));
+
+  for (uint8_t i = 0; i < SERVO_COUNT; i++)
+  {
+    Serial.print(F("S"));
+
+    if ((i + 1) < 10)
+      Serial.print('0');
+
+    Serial.print(i + 1);
+
+    Serial.print(F("   | "));
+
+    if (cfg.servo[i].zeroPhys < 100)
+      Serial.print(' ');
+    if (cfg.servo[i].zeroPhys < 10)
+      Serial.print(' ');
+
+    Serial.print(cfg.servo[i].zeroPhys);
+
+    Serial.print(F("  | "));
+
+    if (cfg.servo[i].relMin >= 0)
+      Serial.print(' ');
+
+    Serial.print(cfg.servo[i].relMin);
+
+    Serial.print(F("    | "));
+
+    if (cfg.servo[i].relMax >= 0)
+      Serial.print(' ');
+
+    Serial.print(cfg.servo[i].relMax);
+
+    Serial.print(F("    | "));
+
+    if (cfg.servo[i].divergingIsLeft)
+      Serial.println(F("LINKS"));
+    else
+      Serial.println(F("RECHTS"));
+  }
+
+  Serial.println(F("=============================================================="));
+  Serial.println();
+
+#endif
+}
 void setupMoveRel(int16_t delta)
 {
   setupRelPos += delta;
@@ -543,45 +760,150 @@ void setupMoveRel(int16_t delta)
   Serial.println(setupRelPos);
 }
 
-void setupAck(uint8_t v)
+#if ENABLE_SX_SETUP_WIZARD
+bool setupAck(uint8_t v)
 {
+  unsigned long start = millis();
+
   while (sx.set(SX_CHAN_SETUP_ACK, v) != 0)
+  {
+    if (millis() - start > 500)
+    {
+#if DEBUG_SERIAL
+      Serial.println(F("WARNUNG: setupAck Timeout"));
+#endif
+      return false;
+    }
+
     delay(2);
+  }
+
+  return true;
 }
+#endif
 
 bool setupValidateAll()
 {
+  // Adresse A ist Pflichtadresse.
+  if (!validSxAddr(cfg.sxAddrA))
+    return false;
+
+  // Adresse B darf 0 (=nicht benutzt) oder 1..111 sein.
+  if (!validOrDisabledSxAddr(cfg.sxAddrB))
+    return false;
+
   for (uint8_t i = 0; i < SERVO_COUNT; i++)
   {
     if (cfg.servo[i].relMin >= cfg.servo[i].relMax)
       return false;
   }
+
   return true;
+}
+
+void printSerialSetupAddressWarning()
+{
+  Serial.println();
+  Serial.println(F("**************************************************************"));
+  Serial.println(F(" WARNUNG: SERVO-SETUP GESTARTET"));
+  Serial.println(F("**************************************************************"));
+  Serial.print(F(" SX-Adresse A (Pflicht): "));
+  Serial.println(cfg.sxAddrA);
+
+  if (cfg.sxAddrB == SX_ADDR_DISABLED)
+  {
+    Serial.println(F(" SX-Adresse B: nicht benutzt (0)"));
+  }
+  else
+  {
+    Serial.print(F(" SX-Adresse B: "));
+    Serial.println(cfg.sxAddrB);
+  }
+
+  Serial.println(F(" Adressen aendern mit: p <1..111> und o <0..111>"));
+  Serial.println(F(" Speichern mit: w"));
+  Serial.println(F("**************************************************************"));
+  Serial.println();
 }
 
 void startInitialSetup(bool fromSxWizard = false)
 {
-  // Servo-Setup und klassischer Modul-Programmiermodus (lokale Prog-Taste)
-  // duerfen nicht parallel aktiv bleiben. Wenn Qt nach lokaler Prog-Taste
-  // automatisch 's' sendet, wird damit bewusst in den Servo-Setup-Wizard
-  // gewechselt.
+  // Servo-Setup und klassischer Modul-Programmiermodus duerfen
+  // nicht parallel aktiv bleiben.
   programming = false;
   setupMode = true;
-  setupBySxWizard = fromSxWizard;
   digitalWrite(PROGLED, HIGH); // D13: Einstellmodus aktiv
   setupStep = 5;
+
+#if ENABLE_SX_SETUP_WIZARD
+  setupBySxWizard = fromSxWizard;
   sxSetupLastCmd = fromSxWizard ? sx.get(SX_CHAN_SETUP_CMD) : 0;
   sxSetupLastServo = fromSxWizard ? sx.get(SX_CHAN_SETUP_SERVO) : 0;
   sxSetupLastMove = fromSxWizard ? sx.get(SX_CHAN_SETUP_MOVE) : 0;
   sxSetupLastStore = fromSxWizard ? sx.get(SX_CHAN_SETUP_STORE) : 0;
-  if (!fromSxWizard)
-    printSetupHelp();
+
+  if (fromSxWizard)
+  {
+    setupSelectServo(0);
+    setupAck(1);
+    return;
+  }
+#else
+  // SX-Wizard ist absichtlich deaktiviert. Selbst wenn versehentlich
+  // true uebergeben wird, bleibt der Setup-Pfad rein seriell.
+  (void)fromSxWizard;
+  setupBySxWizard = false;
+#endif
+
+  printSerialSetupAddressWarning();
+  printSetupHelp();
   setupSelectServo(0);
-  setupAck(1);
+}
+
+bool saveAndExitSetup(const __FlashStringHelper *source)
+{
+#if DEBUG_SERIAL
+  Serial.print(F("DEBUG: SAVE gestartet, Quelle="));
+  Serial.println(source);
+#endif
+
+  if (!setupValidateAll())
+  {
+    Serial.println(
+        F("FEHLER: Konfiguration ungueltig (Adresse A/B oder Servo-Endpunkte). Nicht gespeichert."));
+    return false;
+  }
+
+#if DEBUG_SERIAL
+  Serial.println(F("DEBUG: Konfiguration gueltig"));
+  Serial.println(F("DEBUG: schreibe EEPROM"));
+#endif
+
+  saveConfig();
+
+#if DEBUG_SERIAL
+  Serial.println(F("DEBUG: EEPROM geschrieben"));
+#endif
+
+  setupMode = false;
+  setupBySxWizard = false;
+  sxActiveSessionId = 0;
+  sxLockedServo = -1;
+  digitalWrite(PROGLED, LOW);
+
+  Serial.print(F("Setup gespeichert und beendet. Quelle="));
+  Serial.println(source);
+
+#if DEBUG_SERIAL
+  debugPrintConfigTable(F("NACH SPEICHERN"));
+#endif
+
+  return true;
 }
 
 void processSetupSerial()
 {
+
   while (Serial.available() > 0)
   {
     char c = (char)Serial.read();
@@ -629,6 +951,12 @@ void processSetupSerial()
     case '5':
       setupStep = 5;
       Serial.println(F("Schrittweite=5"));
+      break;
+    case 'p':
+    case 'P':
+    case 'o':
+    case 'O':
+      handleSerialSxAddressCommand(c);
       break;
     case 'a':
     case 'A':
@@ -697,28 +1025,23 @@ void processSetupSerial()
     break;
 
     case 'w':
-    {
-      bool ok = setupValidateAll();
-      if (!ok)
-      {
-        setupAck(2);
-        Serial.println(F("FEHLER: mindestens ein Servo hat relMin >= relMax. Nicht gespeichert."));
-      }
-      else
-      {
-        saveConfig();
-        setupMode = false;
-        digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
-        setupAck(1);
-        Serial.println(F("Setup gespeichert, beendet."));
-      }
-    }
-    break;
+    case 'W':
+      saveAndExitSetup(F("serial"));
+      break;
+
     case 'x':
+    case 'X':
+
       setupMode = false;
-      digitalWrite(PROGLED, LOW); // D13 aus: Einstellmodus beendet
-      setupAck(0);
+      setupBySxWizard = false;
+
+      sxActiveSessionId = 0;
+      sxLockedServo = -1;
+
+      digitalWrite(PROGLED, LOW);
+
       Serial.println(F("Setup beendet ohne Speichern."));
+
       break;
     case 'h':
     case '?':
@@ -831,12 +1154,25 @@ void setup()
   delay(10);
 
   bool loadedFromEeprom = loadConfig();
+
   if (!loadedFromEeprom)
   {
     setDefaults();
     saveConfig();
+
+#if DEBUG_SERIAL
+    Serial.println(F("DEBUG: EEPROM ungueltig -> Defaults erzeugt und gespeichert"));
+#endif
+  }
+  else
+  {
+#if DEBUG_SERIAL
+    Serial.println(F("DEBUG: Konfiguration erfolgreich aus EEPROM geladen"));
+#endif
   }
 
+  debugPrintConfigTable(
+      loadedFromEeprom ? F("EEPROM") : F("DEFAULTS"));
   Serial.println();
   Serial.println(F("SX30 ServoDecoder start"));
   Serial.print(F("FW-Version: SX30-ServoDecoder "));
@@ -863,6 +1199,7 @@ void setup()
   applyAllFromSx(oldDataA, oldDataB, useA, useB);
 }
 
+#if ENABLE_SX_SETUP_WIZARD
 void processSetupSxWizard()
 {
   const unsigned long nowMs = millis();
@@ -1063,53 +1400,58 @@ void processSetupSxWizard()
   }
 }
 
+#endif
+
 void loop()
 {
+#if ENABLE_SX_SETUP_WIZARD
   processSetupSxWizard();
+#endif
 
+  // Im S-Setup:
+  // - LED 13 bleibt EIN.
+  // - lokaler Taster ist identisch zu 'w':
+  //   validieren, EEPROM speichern, Setup beenden, LED AUS.
   if (setupMode)
   {
-    // Während aktivem Servo-Setup muss ein erneuter lokaler Tastendruck den Modus
-    // sauber beenden können (D13 aus, Track wieder EIN, Statuszeile senden).
+    digitalWrite(PROGLED, HIGH);
+
     if (keypressed())
     {
-      setupMode = false;
-      setupBySxWizard = false;
-      sxActiveSessionId = 0;
-      sxLockedServo = -1;
-      digitalWrite(PROGLED, LOW);
-      sx.setTrackBit(1);
-      Serial.print(F("PROG_STATUS active=0 source=local_button track="));
-      Serial.print(sx.getTrackBit());
-      Serial.println(F(" led=0"));
-      Serial.println(F("Setup beendet per lokaler Prog-Taste."));
+      saveAndExitSetup(F("button"));
       return;
     }
 
-    // Serial-Befehle immer erlauben (auch wenn Setup per SX-Wizard gestartet wurde),
-    // damit 'x'/'w'/+/- lokal zuverlässig funktionieren.
     processSetupSerial();
     return;
   }
 
-  // Setup-Trigger jederzeit per seriell
+  // Ausserhalb des S-Setups:
+  // serielles 's' startet das Setup.
   while (Serial.available() > 0)
   {
     char c = (char)Serial.read();
+
     if (c == '\r' || c == '\n' || c == ' ')
       continue;
+
+#if DEBUG_SERIAL
     Serial.print(F("RX:"));
     Serial.println(c);
+#endif
+
     if (c == 's' || c == 'S')
     {
-      startInitialSetup(false);
+      startInitialSetup(false);   // setzt setupMode=true und LED 13 HIGH
       return;
     }
+
     if (c == 't' || c == 'T')
     {
       emitHello();
       continue;
     }
+
     if (c == 'c' || c == 'C')
     {
       emitCfgDump();
@@ -1117,6 +1459,19 @@ void loop()
     }
   }
 
+  // Lokaler Taster startet jetzt immer das gleiche Setup wie 's'.
+  // Der alte lokale SX-Modul-Programmiermodus wird nicht mehr ueber
+  // diesen Taster gestartet.
+  if (keypressed())
+  {
+#if DEBUG_SERIAL
+    Serial.println(F("DEBUG: Taster gedrueckt -> starte S-Setup"));
+#endif
+    startInitialSetup(false);
+    return;
+  }
+
+  // ---------------- Normaler SX-Fahrbetrieb ----------------
   bool useA = sxAddrEnabled(cfg.sxAddrA);
   bool useB = sxAddrEnabled(cfg.sxAddrB);
 
@@ -1124,8 +1479,10 @@ void loop()
   uint8_t dB = useB ? sx.get(cfg.sxAddrB) : oldDataB;
 
   bool changed = false;
+
   if (useA && dA != oldDataA)
     changed = true;
+
   if (useB && dB != oldDataB)
     changed = true;
 
@@ -1134,41 +1491,9 @@ void loop()
     applyAllFromSx(dA, dB, useA, useB);
   }
 
-  // Pro Loop maximal ein Servo-Schritt
   processPendingServoStep();
   processServoAutoRelease();
 
-  uint8_t track = sx.getTrackBit();
-
-  // Selectrix-Regel: bei Gleis EIN darf Prog-LED nicht aktiv bleiben.
-  if (track)
-  {
-    if (programming)
-      finishModuleProgramming();
-    if (setupMode)
-    {
-      setupMode = false;
-      setupBySxWizard = false;
-      sxActiveSessionId = 0;
-      sxLockedServo = -1;
-    }
-    digitalWrite(PROGLED, LOW);
-  }
-
-  if (programming)
-  {
-    if (track || keypressed())
-    {
-      // Ende Programmiermodus bei Track EIN oder erneutem Tastendruck
-      finishModuleProgramming();
-    }
-  }
-  else
-  {
-    // Start Programmiermodus nur bei Track AUS und Tastendruck
-    if ((track == 0) && keypressed())
-    {
-      startModuleProgramming();
-    }
-  }
+  // Ausserhalb des Setups ist die Setup-LED aus.
+  digitalWrite(PROGLED, LOW);
 }
