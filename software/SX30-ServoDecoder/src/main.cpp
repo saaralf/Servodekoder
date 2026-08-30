@@ -46,6 +46,7 @@ const uint16_t SERVO_MAX_TICK = 500; // bei Bedarf kalibrieren
 
 const char FW_DECODER_TYPE[] = "servodecoder";
 const char FW_VERSION[] = "2026-08-30-Button-S-W";
+const char FW_HARDWARE[] = "V1.0 und V4.0 verwenden";
 const uint8_t FW_PROTO = 1;
 
 // ---------------- SX Kanalgrenzen ----------------
