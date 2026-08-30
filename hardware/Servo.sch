@@ -11320,7 +11320,7 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <text x="165.1" y="27.94" size="2.1844" layer="94" ratio="9">Michael Keller
 saaralf Modellbahn</text>
 <text x="175.26" y="2.54" size="1.778" layer="101">23.10.2024</text>
-<text x="180.34" y="20.32" size="1.778" layer="101">FunktionsdekoderAufsatz V3.2 für openSX Basisplatine 2.0</text>
+<text x="180.34" y="20.32" size="1.778" layer="101">FunktionsdekoderAufsatz V4.0 für openSX (saaralf) Basisplatine V3.0</text>
 <text x="106.68" y="48.26" size="1.778" layer="97">Reverse voltage</text>
 <text x="109.22" y="45.72" size="1.778" layer="97">protection</text>
 </plain>
