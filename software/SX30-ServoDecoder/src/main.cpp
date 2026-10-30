@@ -119,7 +119,8 @@ int8_t sxLockedServo = -1;
 // Sequenzielles Ansteuern: niemals alle Servos gleichzeitig umschalten
 // Groessere Staffelzeit reduziert Stromspitzen bei Mehrfach-Umschaltung.
 const uint16_t SERVO_SWITCH_INTERVAL_MS = 180;
-const uint16_t SERVO_HOLD_AFTER_MOVE_MS = 350;
+const uint16_t SERVO_HOLD_AFTER_MOVE_MS = 2000;
+bool servoHoldAlways = false;
 uint8_t pendingDataA = 0;
 uint8_t pendingDataB = 0;
 uint8_t pendingMaskA = 0;
@@ -187,6 +188,8 @@ void releaseServoOutput(uint8_t ch)
 
 void processServoAutoRelease()
 {
+  if (servoHoldAlways)
+    return;
   const uint32_t now = millis();
   for (uint8_t ch = 0; ch < SERVO_COUNT; ch++)
   {
@@ -413,10 +416,14 @@ void printSetupHelp()
   Serial.println(F("1/2/5 = Schrittweite 1/2/5"));
   Serial.println(F("a = gespeicherte Abzweig-Position anfahren"));
   Serial.println(F("g = gespeicherte Gerade-Position anfahren"));
+  Serial.println(F("i = Orientierung toggeln (Abzweig links/rechts)"));
+  Serial.println(F("k = Servo-Hold an/aus (Strom bleibt an)"));
+  Serial.println(F("z = Reset: relMin=-5, relMax=+5, Mitte (rel 0)"));
   Serial.println(F("p <1..111> = SX-Adresse A setzen (Pflichtadresse, Default=3)"));
   Serial.println(F("o <0..111> = SX-Adresse B setzen (0=nicht benutzt)"));
   Serial.println(F("+ = nach rechts, - = nach links (um Schrittweite)"));
   Serial.println(F("w = alles speichern und Setup beenden"));
+  Serial.println(F("e = speichern ohne Setup zu beenden"));
   Serial.println(F("Taster = wie w: speichern und Setup beenden"));
   Serial.println(F("x = Setup ohne Speichern beenden"));
 }
@@ -671,6 +678,8 @@ void setupSelectServo(uint8_t ch)
   Serial.print(F("\nServo S"));
   Serial.print(setupServo + 1);
   Serial.println(F(" aktiv, Mitte angefahren (rel 0)."));
+  Serial.print(F("Orientierung: Abzweig ist "));
+  Serial.println(cfg.servo[setupServo].divergingIsLeft ? F("LINKS") : F("RECHTS"));
   setupTelemetryState(F("core"), F("select"));
 }
 
@@ -787,16 +796,27 @@ bool setupValidateAll()
 {
   // Adresse A ist Pflichtadresse.
   if (!validSxAddr(cfg.sxAddrA))
+  {
+    Serial.println(F("FEHLER: Adresse A ungueltig."));
     return false;
+  }
 
   // Adresse B darf 0 (=nicht benutzt) oder 1..111 sein.
   if (!validOrDisabledSxAddr(cfg.sxAddrB))
+  {
+    Serial.println(F("FEHLER: Adresse B ungueltig."));
     return false;
+  }
 
   for (uint8_t i = 0; i < SERVO_COUNT; i++)
   {
     if (cfg.servo[i].relMin >= cfg.servo[i].relMax)
+    {
+      Serial.print(F("FEHLER: Servo "));
+      Serial.print(i + 1);
+      Serial.println(F(" relMin >= relMax."));
       return false;
+    }
   }
 
   return true;
@@ -1014,6 +1034,7 @@ void processSetupSerial()
     {
       int16_t b = setupRelPos;
       setupMoveRel(setupStep);
+      Serial.println(F("Richtung: + (rel++)"));
       setupTelemetryMove(F("serial"), setupStep, 2, b, setupRelPos);
     }
     break;
@@ -1021,9 +1042,23 @@ void processSetupSerial()
     {
       int16_t b = setupRelPos;
       setupMoveRel(-setupStep);
+      Serial.println(F("Richtung: - (rel--)"));
       setupTelemetryMove(F("serial"), setupStep, 1, b, setupRelPos);
     }
     break;
+
+    case 'e':
+    case 'E':
+    {
+      if (!setupValidateAll())
+      {
+        Serial.println(F("FEHLER: Konfiguration ungueltig. Nicht gespeichert."));
+        break;
+      }
+      saveConfig();
+      Serial.println(F("Konfiguration gespeichert (Setup bleibt aktiv)."));
+      break;
+    }
 
     case 'w':
     case 'W':
@@ -1044,6 +1079,36 @@ void processSetupSerial()
       Serial.println(F("Setup beendet ohne Speichern."));
 
       break;
+    case 'z':
+    case 'Z':
+    {
+      cfg.servo[setupServo].relMin = -5;
+      cfg.servo[setupServo].relMax = 5;
+      setupRelPos = 0;
+      setServoRel(setupServo, setupRelPos);
+      Serial.print(F("S"));
+      Serial.print(setupServo + 1);
+      Serial.println(F(" Reset: relMin=-5, relMax=+5, Mitte (rel 0)."));
+      break;
+    }
+    case 'k':
+    case 'K':
+    {
+      servoHoldAlways = !servoHoldAlways;
+      Serial.print(F("Servo-Hold: "));
+      Serial.println(servoHoldAlways ? F("AN (Strom bleibt)") : F("AUS (Auto-Release)"));
+      break;
+    }
+    case 'i':
+    case 'I':
+    {
+      cfg.servo[setupServo].divergingIsLeft = cfg.servo[setupServo].divergingIsLeft ? 0 : 1;
+      Serial.print(F("S"));
+      Serial.print(setupServo + 1);
+      Serial.print(F(" Orientierung: Abzweig ist "));
+      Serial.println(cfg.servo[setupServo].divergingIsLeft ? F("LINKS") : F("RECHTS"));
+      break;
+    }
     case 'h':
     case '?':
       printSetupHelp();
@@ -1424,6 +1489,7 @@ void loop()
     }
 
     processSetupSerial();
+    processServoAutoRelease();
     return;
   }
 
